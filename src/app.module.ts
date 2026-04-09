@@ -6,6 +6,9 @@ import { UsersModule } from './users/users.module';
 import { User } from './users/entities/user.entity';
 import { ProductsModule } from './products/products.module';
 import { Product } from './products/entities/product.entity';
+import { OrdersModule } from './orders/orders.module';
+import { Order } from './orders/entities/order.entity';
+import { OrderItem } from './orders/entities/order-item.entity';
 
 @Module({
   imports: [
@@ -21,6 +24,7 @@ import { Product } from './products/entities/product.entity';
     }),
     UsersModule,
     ProductsModule,
+    OrdersModule,
   ],
   controllers: [AppController],
   providers: [AppService],
