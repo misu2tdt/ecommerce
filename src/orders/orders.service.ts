@@ -5,12 +5,16 @@ import { Order } from './entities/order.entity';
 import { OrderItem } from './entities/order-item.entity';
 import { Product } from '../products/entities/product.entity';
 import { CreateOrderDto } from './dto/create-order.dto';
+// 1. THÊM MỚI: Import bưu tá
+import { TelegramService } from '../telegram/telegram.service'; 
 
 @Injectable()
 export class OrdersService {
   constructor(
     @InjectRepository(Order) private orderRepo: Repository<Order>,
     @InjectRepository(Product) private productRepo: Repository<Product>,
+    // 2. THÊM MỚI: Cấp thẻ nhân viên cho bưu tá
+    private telegramService: TelegramService, 
   ) {}
 
   async checkout(createOrderDto: CreateOrderDto) {
@@ -20,7 +24,6 @@ export class OrdersService {
 
     // 1. Duyệt qua từng món hàng khách đặt trong giỏ
     for (const item of items) {
-      // Tìm hàng trong kho
       const product = await this.productRepo.findOne({ where: { id: item.productId } });
 
       if (!product) {
@@ -30,29 +33,42 @@ export class OrdersService {
         throw new BadRequestException(`Sản phẩm ${product.name} chỉ còn ${product.stock} cái, không đủ để bán!`);
       }
 
-      // 2. Tính tiền bằng giá GỐC TRONG KHO và trừ số lượng tồn kho
+      // 2. Tính tiền và trừ tồn kho
       totalPrice += product.price * item.quantity;
       product.stock -= item.quantity;
-      await this.productRepo.save(product); // Cập nhật lại kho hàng ngay lập tức
+      await this.productRepo.save(product); 
 
       // 3. Đóng gói chi tiết đơn hàng
       const orderItem = new OrderItem();
       orderItem.product = product;
       orderItem.quantity = item.quantity;
-      orderItem.price = product.price; // Chốt giá tại thời điểm mua (mặc kệ sau này có lạm phát)
+      orderItem.price = product.price; 
       
       orderItemsToSave.push(orderItem);
     }
 
     // 4. Tạo cái vỏ Đơn hàng tổng
     const newOrder = this.orderRepo.create({
-      user: { id: userId }, // Nối vào user đang mua
+      user: { id: userId }, 
       totalPrice: totalPrice,
       status: 'pending',
-      items: orderItemsToSave, // Gắn mảng chi tiết vào. Nhờ có cascade: true lúc nãy thiết kế, TypeORM sẽ tự lưu đống này!
+      items: orderItemsToSave, 
     });
 
     // 5. Lưu đơn hàng
-    return await this.orderRepo.save(newOrder);
+    const savedOrder = await this.orderRepo.save(newOrder);
+
+    // 6. THÊM MỚI: Gọi Bot Telegram đi báo tin vui
+    const msg = `🚨 <b>CÓ ĐƠN HÀNG MỚI!</b>\n\n` +
+                `👤 <b>Khách hàng ID:</b> ${userId}\n` +
+                `💰 <b>Tổng tiền:</b> $${totalPrice}\n` +
+                `📦 <b>Trạng thái:</b> ${savedOrder.status}\n` +
+                `⏰ <b>Thời gian:</b> ${new Date().toLocaleString()}`;
+                
+    console.log('Bắt đầu gọi Bot Telegram...'); 
+    this.telegramService.sendMessage(msg);
+
+    // 7. Trả hóa đơn về cho khách
+    return savedOrder;
   }
 }
