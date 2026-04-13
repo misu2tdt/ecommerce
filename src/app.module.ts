@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config'; // 1. Bổ sung import ConfigModule
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { UsersModule } from './users/users.module';
@@ -9,22 +10,29 @@ import { Product } from './products/entities/product.entity';
 import { OrdersModule } from './orders/orders.module';
 import { Order } from './orders/entities/order.entity';
 import { OrderItem } from './orders/entities/order-item.entity';
+import { TelegramModule } from './telegram/telegram.module';
 
 @Module({
   imports: [
+    // 2. Kích hoạt ConfigModule để đọc biến môi trường từ file .env
+    ConfigModule.forRoot({
+      isGlobal: true,
+    }),
     TypeOrmModule.forRoot({
       type: 'postgres',
       host: 'localhost',
-      port: 5434, // Cổng mới của dự án E-commerce
+      port: 5434,
       username: 'postgres',
       password: '123456',
       database: 'postgres',
-      entities: [User], // Đăng ký bản vẽ User
-      synchronize: true, // Tự động tạo bảng
+      // 3. SỬA ĐIỂM CHẾT: Khai báo đầy đủ cả 4 bản vẽ cho TypeORM
+      entities: [User, Product, Order, OrderItem], 
+      synchronize: true, 
     }),
     UsersModule,
     ProductsModule,
     OrdersModule,
+    TelegramModule,
   ],
   controllers: [AppController],
   providers: [AppService],
