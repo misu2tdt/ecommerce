@@ -11,6 +11,7 @@ import { OrdersModule } from './orders/orders.module';
 import { Order } from './orders/entities/order.entity';
 import { OrderItem } from './orders/entities/order-item.entity';
 import { TelegramModule } from './telegram/telegram.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { TelegramModule } from './telegram/telegram.module';
     ProductsModule,
     OrdersModule,
     TelegramModule,
+    AuthModule,
   ],
   controllers: [AppController],
   providers: [AppService],
