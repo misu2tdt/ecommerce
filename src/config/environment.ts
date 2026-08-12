@@ -1,11 +1,9 @@
-import { ConfigService } from '@nestjs/config';
 import type { JwtSignOptions } from '@nestjs/jwt';
 
-export function getRequiredConfig(
-  configService: ConfigService,
-  key: string,
-): string {
-  const value = configService.get<string>(key);
+export type ConfigReader = (key: string) => unknown;
+
+export function getRequiredConfig(reader: ConfigReader, key: string): string {
+  const value = reader(key);
 
   if (typeof value !== 'string' || value.trim().length === 0) {
     throw new Error(`${key} must be configured`);
@@ -14,8 +12,8 @@ export function getRequiredConfig(
   return value;
 }
 
-export function getDatabasePort(configService: ConfigService): number {
-  const rawPort = getRequiredConfig(configService, 'DB_PORT');
+export function getDatabasePort(reader: ConfigReader): number {
+  const rawPort = getRequiredConfig(reader, 'DB_PORT');
   const port = Number(rawPort);
 
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
@@ -26,9 +24,9 @@ export function getDatabasePort(configService: ConfigService): number {
 }
 
 export function getJwtExpiration(
-  configService: ConfigService,
+  reader: ConfigReader,
 ): JwtSignOptions['expiresIn'] {
-  const value = getRequiredConfig(configService, 'JWT_EXPIRES_IN').trim();
+  const value = getRequiredConfig(reader, 'JWT_EXPIRES_IN').trim();
 
   if (/^\d+$/.test(value)) {
     const seconds = Number(value);
