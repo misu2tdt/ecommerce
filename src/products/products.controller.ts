@@ -1,18 +1,22 @@
-import { Controller, Get, Post, Body } from '@nestjs/common';
-import { ProductsService } from './products.service';
+import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { AuthGuard } from '../auth/auth.guard';
+import { Roles } from '../auth/roles.decorator';
+import { RolesGuard } from '../auth/roles.guard';
+import { UserRole } from '../users/entities/user-role.enum';
 import { CreateProductDto } from './dto/create-product.dto';
+import { ProductsService } from './products.service';
 
 @Controller('products')
 export class ProductsController {
   constructor(private readonly productsService: ProductsService) {}
 
-  // API dành cho Admin: POST http://localhost:3000/products
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
   @Post()
   async create(@Body() createProductDto: CreateProductDto) {
     return await this.productsService.create(createProductDto);
   }
 
-  // API dành cho Khách hàng: GET http://localhost:3000/products
   @Get()
   async findAll() {
     return await this.productsService.findAll();

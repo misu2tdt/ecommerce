@@ -17,8 +17,8 @@ export class OrdersService {
     private telegramService: TelegramService, 
   ) {}
 
-  async checkout(createOrderDto: CreateOrderDto) {
-    const { userId, items } = createOrderDto;
+  async checkout(userId: number, createOrderDto: CreateOrderDto) {
+    const { items } = createOrderDto;
     let totalPrice = 0;
     const orderItemsToSave: OrderItem[] = [];
 
