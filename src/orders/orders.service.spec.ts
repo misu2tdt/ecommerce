@@ -65,6 +65,10 @@ describe('OrdersService', () => {
     });
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
+    expect(productRepo.findOne).toHaveBeenCalledWith({
+      where: { id: product.id },
+      lock: { mode: 'pessimistic_write' },
+    });
     expect(product.stock).toBe(3);
     expect(productRepo.save).toHaveBeenCalledWith(product);
     expect(orderRepo.create).toHaveBeenCalledWith(
@@ -93,7 +97,7 @@ describe('OrdersService', () => {
       }),
     ).rejects.toBeInstanceOf(BadRequestException);
 
-    expect(productRepo.save).toHaveBeenCalledTimes(1);
+    expect(productRepo.save).not.toHaveBeenCalled();
     expect(orderRepo.save).not.toHaveBeenCalled();
     expect(telegramService.sendMessage).not.toHaveBeenCalled();
   });
@@ -144,6 +148,114 @@ describe('OrdersService', () => {
 
     expect(dataSource.transaction).toHaveBeenCalledTimes(1);
     expect(telegramService.sendMessage).toHaveBeenCalledTimes(1);
+  });
+
+  it('locks unique product IDs in deterministic ascending order', async () => {
+    productRepo.findOne.mockImplementation(
+      async ({ where }: { where: { id: number } }) =>
+        createProduct({ id: where.id, stock: 10 }),
+    );
+    orderRepo.save.mockResolvedValue(createSavedOrder());
+
+    await service.checkout(7, {
+      items: [
+        { productId: 5, quantity: 1 },
+        { productId: 2, quantity: 1 },
+        { productId: 3, quantity: 1 },
+      ],
+    });
+
+    expect(productRepo.findOne.mock.calls.map(([options]) => options)).toEqual([
+      { where: { id: 2 }, lock: { mode: 'pessimistic_write' } },
+      { where: { id: 3 }, lock: { mode: 'pessimistic_write' } },
+      { where: { id: 5 }, lock: { mode: 'pessimistic_write' } },
+    ]);
+  });
+
+  it('aggregates duplicate products into one stock update and order item', async () => {
+    const product = createProduct({ id: 5, stock: 10 });
+    productRepo.findOne.mockResolvedValue(product);
+    orderRepo.save.mockResolvedValue(createSavedOrder());
+
+    await service.checkout(7, {
+      items: [
+        { productId: 5, quantity: 1 },
+        { productId: 5, quantity: 2 },
+      ],
+    });
+
+    expect(productRepo.findOne).toHaveBeenCalledTimes(1);
+    expect(product.stock).toBe(7);
+    expect(productRepo.save).toHaveBeenCalledTimes(1);
+    expect(orderItemRepo.create).toHaveBeenCalledTimes(1);
+    expect(orderItemRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({ product, quantity: 3, price: product.price }),
+    );
+    expect(orderRepo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        totalPrice: 30,
+        items: [expect.objectContaining({ quantity: 3 })],
+      }),
+    );
+  });
+
+  it('rejects when an aggregated quantity exceeds locked stock', async () => {
+    productRepo.findOne.mockResolvedValue(
+      createProduct({ id: 5, stock: 2 }),
+    );
+
+    await expect(
+      service.checkout(7, {
+        items: [
+          { productId: 5, quantity: 1 },
+          { productId: 5, quantity: 2 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(productRepo.findOne).toHaveBeenCalledTimes(1);
+    expect(productRepo.save).not.toHaveBeenCalled();
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(telegramService.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it('requests a pessimistic write lock before stock validation', async () => {
+    productRepo.findOne.mockResolvedValue(createProduct({ stock: 1 }));
+
+    await expect(
+      service.checkout(7, {
+        items: [{ productId: 1, quantity: 2 }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(productRepo.findOne).toHaveBeenCalledWith({
+      where: { id: 1 },
+      lock: { mode: 'pessimistic_write' },
+    });
+    expect(productRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('rejects when a requested product row is missing after locking', async () => {
+    productRepo.findOne
+      .mockResolvedValueOnce(createProduct({ id: 1, stock: 5 }))
+      .mockResolvedValueOnce(null);
+
+    await expect(
+      service.checkout(7, {
+        items: [
+          { productId: 2, quantity: 1 },
+          { productId: 1, quantity: 1 },
+        ],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(productRepo.findOne.mock.calls.map(([options]) => options)).toEqual([
+      { where: { id: 1 }, lock: { mode: 'pessimistic_write' } },
+      { where: { id: 2 }, lock: { mode: 'pessimistic_write' } },
+    ]);
+    expect(productRepo.save).not.toHaveBeenCalled();
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(telegramService.sendMessage).not.toHaveBeenCalled();
   });
 });
 
