@@ -21,8 +21,7 @@ import { UsersModule } from './users/users.module';
       useFactory: (configService: ConfigService) => ({
         ...createDatabaseOptions((key) => configService.get(key)),
         entities: databaseEntities,
-        // TODO Phase 0F2: set synchronize to false after initial migration is established.
-        synchronize: true,
+        synchronize: false,
       }),
     }),
     UsersModule,
