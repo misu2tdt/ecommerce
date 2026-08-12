@@ -9,7 +9,10 @@ export class TelegramService {
 
   constructor(private configService: ConfigService) {
     this.botToken = this.configService.get<string>('TELEGRAM_BOT_TOKEN') || '';
-    this.chatId = this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID') || '';
+    this.chatId =
+      this.configService.get<string>('TELEGRAM_CHAT_ID') ||
+      this.configService.get<string>('TELEGRAM_ADMIN_CHAT_ID') ||
+      '';
   }
 
   // ĐÂY CHÍNH LÀ CÁI HÀM MÀ TYPESCRIPT ĐANG TÌM KIẾM NÀY:

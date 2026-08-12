@@ -25,11 +25,15 @@ export class AuthService {
       throw new UnauthorizedException('Email hoặc Mật khẩu không chính xác!');
     }
 
-    const payload = { sub: user.id, email: user.email }; 
+    const payload = { 
+      sub: user.id, 
+      email: user.email,
+      role: user.role // Thêm dòng này!
+    }; 
     
     return {
       message: 'Đăng nhập thành công!',
       access_token: await this.jwtService.signAsync(payload),
     };
+    };
   }
-}
