@@ -4,12 +4,14 @@ import {
   Entity,
   JoinColumn,
   ManyToOne,
+  OneToMany,
   PrimaryGeneratedColumn,
   UpdateDateColumn,
 } from 'typeorm';
 import { Brand } from '../../brands/entities/brand.entity';
 import { Category } from '../../categories/entities/category.entity';
 import { ProductStatus } from './product-status.enum';
+import { ProductImage } from './product-image.entity';
 
 @Entity('products')
 export class Product {
@@ -48,6 +50,9 @@ export class Product {
   @ManyToOne(() => Brand, { nullable: true, onDelete: 'RESTRICT' })
   @JoinColumn({ name: 'brandId' })
   brand!: Brand | null;
+
+  @OneToMany(() => ProductImage, (image) => image.product)
+  images?: ProductImage[];
 
   @CreateDateColumn()
   createdAt!: Date;

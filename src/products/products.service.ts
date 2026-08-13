@@ -13,7 +13,13 @@ import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductStatus } from './entities/product-status.enum';
+import { ProductImage } from './entities/product-image.entity';
 import { Product } from './entities/product.entity';
+
+export type PublicProductImage = Omit<ProductImage, 'storageKey' | 'product'>;
+export type PublicProduct = Omit<Product, 'images'> & {
+  images: PublicProductImage[];
+};
 
 @Injectable()
 export class ProductsService {
@@ -58,11 +64,17 @@ export class ProductsService {
     }
   }
 
-  async findAll(query: ProductQueryDto): Promise<Product[]> {
+  async findAll(query: ProductQueryDto): Promise<PublicProduct[]> {
     const builder = this.productsRepository
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.brand', 'brand')
+      .leftJoinAndSelect(
+        'product.images',
+        'image',
+        'image.isPrimary = :isPrimary',
+        { isPrimary: true },
+      )
       .where('product.status = :status', { status: ProductStatus.ACTIVE });
 
     if (query.category) {
@@ -79,19 +91,32 @@ export class ProductsService {
       });
     }
 
-    return builder
+    const products = await builder
       .orderBy('product.name', 'ASC')
       .addOrderBy('product.id', 'ASC')
+      .addOrderBy('image.position', 'ASC')
+      .addOrderBy('image.id', 'ASC')
       .getMany();
+
+    return products.map((product) => this.toPublicProduct(product));
   }
 
-  async findBySlug(slug: string): Promise<Product> {
-    const product = await this.productsRepository.findOne({
-      where: { slug, status: ProductStatus.ACTIVE },
-      relations: { category: true, brand: true },
-    });
+  async findBySlug(slug: string): Promise<PublicProduct> {
+    const product = await this.productsRepository
+      .createQueryBuilder('product')
+      .innerJoinAndSelect('product.category', 'category')
+      .leftJoinAndSelect('product.brand', 'brand')
+      .leftJoinAndSelect('product.images', 'image')
+      .where('product.slug = :slug', { slug })
+      .andWhere('product.status = :status', {
+        status: ProductStatus.ACTIVE,
+      })
+      .orderBy('image.isPrimary', 'DESC')
+      .addOrderBy('image.position', 'ASC')
+      .addOrderBy('image.id', 'ASC')
+      .getOne();
     if (!product) throw new NotFoundException('Product not found');
-    return product;
+    return this.toPublicProduct(product);
   }
 
   async update(id: number, dto: UpdateProductDto): Promise<Product> {
@@ -133,5 +158,15 @@ export class ProductsService {
     const brand = await this.brandsRepository.findOneBy({ id });
     if (!brand) throw new NotFoundException('Brand not found');
     return brand;
+  }
+
+  private toPublicProduct(product: Product): PublicProduct {
+    const { images = [], ...fields } = product;
+    return {
+      ...fields,
+      images: images.map(
+        ({ storageKey: _storageKey, product: _product, ...image }) => image,
+      ),
+    };
   }
 }

@@ -6,10 +6,15 @@ import { Product } from './entities/product.entity';
 import { AuthModule } from '../auth/auth.module';
 import { Category } from '../categories/entities/category.entity';
 import { Brand } from '../brands/entities/brand.entity';
+import { ProductImage } from './entities/product-image.entity';
+import { ProductImagesService } from './product-images.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Product, Category, Brand]), AuthModule],
+  imports: [
+    TypeOrmModule.forFeature([Product, ProductImage, Category, Brand]),
+    AuthModule,
+  ],
   controllers: [ProductsController],
-  providers: [ProductsService],
+  providers: [ProductsService, ProductImagesService],
 })
 export class ProductsModule {}
