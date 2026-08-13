@@ -1,74 +1,117 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Order } from './entities/order.entity';
-import { OrderItem } from './entities/order-item.entity';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { Product } from '../products/entities/product.entity';
+import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto } from './dto/create-order.dto';
-// 1. THÊM MỚI: Import bưu tá
-import { TelegramService } from '../telegram/telegram.service'; 
+import { OrderItem } from './entities/order-item.entity';
+import { Order } from './entities/order.entity';
+
+interface NormalizedOrderItem {
+  productId: number;
+  quantity: number;
+}
 
 @Injectable()
 export class OrdersService {
+  private readonly logger = new Logger(OrdersService.name);
+
   constructor(
-    @InjectRepository(Order) private orderRepo: Repository<Order>,
-    @InjectRepository(Product) private productRepo: Repository<Product>,
-    // 2. THÊM MỚI: Cấp thẻ nhân viên cho bưu tá
-    private telegramService: TelegramService, 
+    private readonly dataSource: DataSource,
+    private readonly telegramService: TelegramService,
   ) {}
 
-  async checkout(createOrderDto: CreateOrderDto) {
-    const { userId, items } = createOrderDto;
-    let totalPrice = 0;
-    const orderItemsToSave: OrderItem[] = [];
+  async checkout(userId: number, createOrderDto: CreateOrderDto) {
+    const normalizedItems = this.normalizeItems(createOrderDto);
 
-    // 1. Duyệt qua từng món hàng khách đặt trong giỏ
-    for (const item of items) {
-      const product = await this.productRepo.findOne({ where: { id: item.productId } });
+    const savedOrder = await this.dataSource.transaction(async (manager) => {
+      const productRepo = manager.getRepository(Product);
+      const orderRepo = manager.getRepository(Order);
+      const orderItemRepo = manager.getRepository(OrderItem);
+      const lockedProducts: Product[] = [];
+      let totalPrice = 0;
+      const orderItemsToSave: OrderItem[] = [];
 
-      if (!product) {
-        throw new BadRequestException(`Sản phẩm ID ${item.productId} không tồn tại!`);
+      for (const item of normalizedItems) {
+        const product = await productRepo.findOne({
+          where: { id: item.productId },
+          lock: { mode: 'pessimistic_write' },
+        });
+
+        if (!product) {
+          throw new BadRequestException(
+            `Sản phẩm ID ${item.productId} không tồn tại!`,
+          );
+        }
+
+        lockedProducts.push(product);
       }
-      if (product.stock < item.quantity) {
-        throw new BadRequestException(`Sản phẩm ${product.name} chỉ còn ${product.stock} cái, không đủ để bán!`);
+
+      for (let index = 0; index < normalizedItems.length; index += 1) {
+        const item = normalizedItems[index];
+        const product = lockedProducts[index];
+
+        if (product.stock < item.quantity) {
+          throw new BadRequestException(
+            `Sản phẩm ${product.name} chỉ còn ${product.stock} cái, không đủ để bán!`,
+          );
+        }
       }
 
-      // 2. Tính tiền và trừ tồn kho
-      totalPrice += product.price * item.quantity;
-      product.stock -= item.quantity;
-      await this.productRepo.save(product); 
+      for (let index = 0; index < normalizedItems.length; index += 1) {
+        const item = normalizedItems[index];
+        const product = lockedProducts[index];
 
-      // 3. Đóng gói chi tiết đơn hàng
-      const orderItem = new OrderItem();
-      orderItem.product = product;
-      orderItem.quantity = item.quantity;
-      orderItem.price = product.price; 
-      
-      orderItemsToSave.push(orderItem);
-    }
+        totalPrice += product.price * item.quantity;
+        product.stock -= item.quantity;
+        await productRepo.save(product);
 
-    // 4. Tạo cái vỏ Đơn hàng tổng
-    const newOrder = this.orderRepo.create({
-      user: { id: userId }, 
-      totalPrice: totalPrice,
-      status: 'pending',
-      items: orderItemsToSave, 
+        orderItemsToSave.push(
+          orderItemRepo.create({
+            product,
+            quantity: item.quantity,
+            price: product.price,
+          }),
+        );
+      }
+
+      const order = orderRepo.create({
+        user: { id: userId },
+        totalPrice,
+        status: 'pending',
+        items: orderItemsToSave,
+      });
+
+      return orderRepo.save(order);
     });
 
-    // 5. Lưu đơn hàng
-    const savedOrder = await this.orderRepo.save(newOrder);
+    const message =
+      `🚨 <b>CÓ ĐƠN HÀNG MỚI!</b>\n\n` +
+      `👤 <b>Khách hàng ID:</b> ${userId}\n` +
+      `💰 <b>Tổng tiền:</b> $${savedOrder.totalPrice}\n` +
+      `📦 <b>Trạng thái:</b> ${savedOrder.status}\n` +
+      `⏰ <b>Thời gian:</b> ${new Date().toLocaleString()}`;
 
-    // 6. THÊM MỚI: Gọi Bot Telegram đi báo tin vui
-    const msg = `🚨 <b>CÓ ĐƠN HÀNG MỚI!</b>\n\n` +
-                `👤 <b>Khách hàng ID:</b> ${userId}\n` +
-                `💰 <b>Tổng tiền:</b> $${totalPrice}\n` +
-                `📦 <b>Trạng thái:</b> ${savedOrder.status}\n` +
-                `⏰ <b>Thời gian:</b> ${new Date().toLocaleString()}`;
-                
-    console.log('Bắt đầu gọi Bot Telegram...'); 
-    this.telegramService.sendMessage(msg);
+    void this.telegramService.sendMessage(message).catch(() => {
+      this.logger.error('Không thể gửi thông báo đơn hàng qua Telegram');
+    });
 
-    // 7. Trả hóa đơn về cho khách
     return savedOrder;
+  }
+
+  private normalizeItems(
+    createOrderDto: CreateOrderDto,
+  ): NormalizedOrderItem[] {
+    const quantitiesByProductId = new Map<number, number>();
+
+    for (const item of createOrderDto.items) {
+      quantitiesByProductId.set(
+        item.productId,
+        (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity,
+      );
+    }
+
+    return [...quantitiesByProductId.entries()]
+      .sort(([firstId], [secondId]) => firstId - secondId)
+      .map(([productId, quantity]) => ({ productId, quantity }));
   }
 }

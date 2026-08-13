@@ -1,36 +1,62 @@
-import { CanActivate, ExecutionContext, Injectable, UnauthorizedException } from '@nestjs/common';
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { Request } from 'express';
+import { UserRole } from '../users/entities/user-role.enum';
+import { AuthenticatedUser, JwtPayload } from './auth.types';
+
+type AuthenticatedRequest = Request & { user?: AuthenticatedUser };
 
 @Injectable()
 export class AuthGuard implements CanActivate {
   constructor(private jwtService: JwtService) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // 1. Chặn khách lại ở cửa và nhìn vào "Sảnh chờ" (Headers) xem khách có cầm thẻ không
-    const request = context.switchToHttp().getRequest();
+    const request = context.switchToHttp().getRequest<AuthenticatedRequest>();
     const token = this.extractTokenFromHeader(request);
-    
+
     if (!token) {
-      throw new UnauthorizedException('Bạn chưa xuất trình Thẻ từ (Token)!');
+      throw new UnauthorizedException('Bạn chưa xuất trình Token!');
     }
-    
+
     try {
-      // 2. Lấy thẻ đút vào Máy quét (verifyAsync) để xem thẻ thật, thẻ giả hay hết hạn
-      const payload = await this.jwtService.verifyAsync(token);
-      
-      // 3. Nếu thẻ thật: Đeo cái "Biển tên" (payload) lên áo khách để Lễ tân bên trong biết là ai
-      request['user'] = payload;
+      const payload = await this.jwtService.verifyAsync<
+        Record<string, unknown>
+      >(token);
+
+      if (!this.isValidPayload(payload)) {
+        throw new UnauthorizedException();
+      }
+
+      request.user = {
+        id: payload.sub,
+        email: payload.email,
+        role: payload.role,
+      };
     } catch {
-      // Nếu máy quét báo lỗi (thẻ fake, thẻ hết hạn) -> Đuổi cổ!
-      throw new UnauthorizedException('Thẻ từ không hợp lệ hoặc đã hết hạn!');
+      throw new UnauthorizedException('Token không hợp lệ hoặc đã hết hạn!');
     }
-    
-    // 4. Mở cửa cho khách bước vào
-    return true; 
+
+    return true;
   }
 
-  // Tuyệt chiêu soi thẻ của bảo vệ: Thẻ phải nằm trong túi "Authorization" và có chữ "Bearer" đi kèm
+  private isValidPayload(
+    payload: Record<string, unknown>,
+  ): payload is Record<string, unknown> & JwtPayload {
+    return (
+      typeof payload.sub === 'number' &&
+      Number.isInteger(payload.sub) &&
+      payload.sub > 0 &&
+      typeof payload.email === 'string' &&
+      payload.email.length > 0 &&
+      (payload.role === UserRole.USER || payload.role === UserRole.ADMIN)
+    );
+  }
+
   private extractTokenFromHeader(request: Request): string | undefined {
     const [type, token] = request.headers.authorization?.split(' ') ?? [];
     return type === 'Bearer' ? token : undefined;

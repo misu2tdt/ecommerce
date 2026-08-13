@@ -1,11 +1,26 @@
-// Đây là cái giỏ hàng nhỏ chứa từng món
+import { Type } from 'class-transformer';
+import {
+  ArrayMinSize,
+  IsArray,
+  IsInt,
+  Min,
+  ValidateNested,
+} from 'class-validator';
+
 export class OrderItemDto {
+  @IsInt()
+  @Min(1)
   productId!: number;
+
+  @IsInt()
+  @Min(1)
   quantity!: number;
 }
 
-// Đây là cái đơn hàng tổng gửi lên server
 export class CreateOrderDto {
-  userId!: number; // Tạm thời khách phải tự gửi ID của họ (Sau này học JWT Auth thì cái này tự lấy từ Token ẩn)
-  items!: OrderItemDto[]; // Mảng chứa danh sách các món hàng
+  @IsArray()
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => OrderItemDto)
+  items!: OrderItemDto[];
 }
