@@ -1,7 +1,9 @@
-import { ConflictException, NotFoundException } from '@nestjs/common';
+import { ConflictException, Logger, NotFoundException } from '@nestjs/common';
 import { QueryFailedError, Repository } from 'typeorm';
 import { Brand } from '../brands/entities/brand.entity';
 import { Category } from '../categories/entities/category.entity';
+import { ImageStorageService } from '../image-storage/image-storage.service';
+import { ProductImage } from './entities/product-image.entity';
 import { ProductStatus } from './entities/product-status.enum';
 import { Product } from './entities/product.entity';
 import { ProductsService } from './products.service';
@@ -12,9 +14,12 @@ describe('ProductsService', () => {
     create: jest.fn(),
     save: jest.fn(),
     findOne: jest.fn(),
+    delete: jest.fn(),
   };
   const categoriesRepository = { findOneBy: jest.fn() };
   const brandsRepository = { findOneBy: jest.fn() };
+  const productImagesRepository = { find: jest.fn() };
+  const imageStorage = { deleteImage: jest.fn() };
   let service: ProductsService;
 
   beforeEach(() => {
@@ -22,6 +27,9 @@ describe('ProductsService', () => {
     productsRepository.existsBy.mockResolvedValue(false);
     productsRepository.create.mockImplementation((value) => value);
     productsRepository.save.mockImplementation(async (value) => value);
+    productsRepository.delete.mockResolvedValue({ affected: 1 });
+    productImagesRepository.find.mockResolvedValue([]);
+    imageStorage.deleteImage.mockResolvedValue(undefined);
     categoriesRepository.findOneBy.mockResolvedValue({
       id: 10,
       slug: 'laptop',
@@ -31,6 +39,8 @@ describe('ProductsService', () => {
       productsRepository as unknown as Repository<Product>,
       categoriesRepository as unknown as Repository<Category>,
       brandsRepository as unknown as Repository<Brand>,
+      productImagesRepository as unknown as Repository<ProductImage>,
+      imageStorage as unknown as ImageStorageService,
     );
   });
 
@@ -135,5 +145,35 @@ describe('ProductsService', () => {
     await expect(service.update(1, { brandId: null })).resolves.toEqual(
       expect.objectContaining({ brandId: null, brand: null }),
     );
+  });
+
+  it('deletes Product before best-effort storage cleanup', async () => {
+    productImagesRepository.find.mockResolvedValue([
+      { id: 7, storageKey: 'ecommerce/products/1/image' },
+    ]);
+
+    await service.remove(1);
+
+    expect(productsRepository.delete).toHaveBeenCalledWith(1);
+    expect(imageStorage.deleteImage).toHaveBeenCalledWith(
+      'ecommerce/products/1/image',
+    );
+    expect(productsRepository.delete.mock.invocationCallOrder[0]).toBeLessThan(
+      imageStorage.deleteImage.mock.invocationCallOrder[0],
+    );
+  });
+
+  it('keeps Product deletion successful when storage cleanup fails', async () => {
+    const loggerErrorSpy = jest
+      .spyOn(Logger.prototype, 'error')
+      .mockImplementation();
+    productImagesRepository.find.mockResolvedValue([
+      { id: 7, storageKey: 'ecommerce/products/1/orphan' },
+    ]);
+    imageStorage.deleteImage.mockRejectedValueOnce(new Error('cleanup failed'));
+
+    await expect(service.remove(1)).resolves.toBeUndefined();
+    expect(loggerErrorSpy).toHaveBeenCalled();
+    loggerErrorSpy.mockRestore();
   });
 });

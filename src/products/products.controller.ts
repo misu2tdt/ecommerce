@@ -8,7 +8,9 @@ import {
   Patch,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
@@ -20,6 +22,7 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductImageDto } from './dto/update-product-image.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductImagesService } from './product-images.service';
+import { ProductImageUploadInterceptor } from './product-image-upload';
 import { ProductsService } from './products.service';
 
 @Controller('products')
@@ -32,11 +35,13 @@ export class ProductsController {
   @Post(':productId/images')
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
+  @UseInterceptors(ProductImageUploadInterceptor)
   createImage(
     @Param('productId', ParseIntPipe) productId: number,
     @Body() dto: CreateProductImageDto,
+    @UploadedFile() file: Express.Multer.File | undefined,
   ) {
-    return this.productImagesService.createForProduct(productId, dto);
+    return this.productImagesService.uploadForProduct(productId, dto, file);
   }
 
   @Patch(':productId/images/:imageId')

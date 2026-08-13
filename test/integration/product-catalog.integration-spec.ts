@@ -4,10 +4,12 @@ import { BrandsService } from '../../src/brands/brands.service';
 import { Brand } from '../../src/brands/entities/brand.entity';
 import { CategoriesService } from '../../src/categories/categories.service';
 import { Category } from '../../src/categories/entities/category.entity';
+import { ImageStorageService } from '../../src/image-storage/image-storage.service';
 import { OrdersService } from '../../src/orders/orders.service';
 import { OrderItem } from '../../src/orders/entities/order-item.entity';
 import { Order } from '../../src/orders/entities/order.entity';
 import { ProductStatus } from '../../src/products/entities/product-status.enum';
+import { ProductImage } from '../../src/products/entities/product-image.entity';
 import { Product } from '../../src/products/entities/product.entity';
 import { ProductsService } from '../../src/products/products.service';
 import { TelegramService } from '../../src/telegram/telegram.service';
@@ -28,6 +30,8 @@ describe('Product catalog PostgreSQL integration', () => {
       dataSource.getRepository(Product),
       dataSource.getRepository(Category),
       dataSource.getRepository(Brand),
+      dataSource.getRepository(ProductImage),
+      { deleteImage: jest.fn() } as unknown as ImageStorageService,
     );
     categoriesService = new CategoriesService(
       dataSource.getRepository(Category),

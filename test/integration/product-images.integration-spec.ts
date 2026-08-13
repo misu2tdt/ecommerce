@@ -4,6 +4,7 @@ import { BrandsService } from '../../src/brands/brands.service';
 import { Brand } from '../../src/brands/entities/brand.entity';
 import { CategoriesService } from '../../src/categories/categories.service';
 import { Category } from '../../src/categories/entities/category.entity';
+import { ImageStorageService } from '../../src/image-storage/image-storage.service';
 import { ProductImage } from '../../src/products/entities/product-image.entity';
 import { Product } from '../../src/products/entities/product.entity';
 import { ProductImagesService } from '../../src/products/product-images.service';
@@ -15,21 +16,43 @@ describe('ProductImage PostgreSQL integration', () => {
   let dataSource: DataSource;
   let imagesService: ProductImagesService;
   let productsService: ProductsService;
+  const imageStorage = {
+    uploadProductImage: jest.fn(),
+    deleteImage: jest.fn(),
+  };
+  const validFile = {
+    buffer: Buffer.from([0xff, 0xd8, 0xff, 0x00]),
+    mimetype: 'image/jpeg',
+    size: 4,
+  };
 
   beforeAll(async () => {
     dataSource = await initializeTestDatabase();
     imagesService = new ProductImagesService(
       dataSource.getRepository(ProductImage),
       dataSource,
+      imageStorage as unknown as ImageStorageService,
     );
     productsService = new ProductsService(
       dataSource.getRepository(Product),
       dataSource.getRepository(Category),
       dataSource.getRepository(Brand),
+      dataSource.getRepository(ProductImage),
+      imageStorage as unknown as ImageStorageService,
     );
   });
 
-  beforeEach(async () => cleanTestDatabase(dataSource));
+  beforeEach(async () => {
+    await cleanTestDatabase(dataSource);
+    jest.clearAllMocks();
+    imageStorage.uploadProductImage.mockImplementation(
+      async (productId: number) => ({
+        url: `https://res.cloudinary.com/demo/${productId}/${imageStorage.uploadProductImage.mock.calls.length}.jpg`,
+        storageKey: `ecommerce/products/${productId}/${imageStorage.uploadProductImage.mock.calls.length}`,
+      }),
+    );
+    imageStorage.deleteImage.mockResolvedValue(undefined);
+  });
 
   afterAll(async () => {
     if (dataSource?.isInitialized) {
@@ -41,19 +64,24 @@ describe('ProductImage PostgreSQL integration', () => {
   it('persists multiple images owned by the correct Product', async () => {
     const product = await createProduct('ownership');
 
-    await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/ownership-1.jpg',
-    });
-    await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/ownership-2.jpg',
-      position: 10,
-    });
+    await imagesService.uploadForProduct(product.id, {}, validFile);
+    await imagesService.uploadForProduct(
+      product.id,
+      { position: 10 },
+      validFile,
+    );
 
     const images = await dataSource.getRepository(ProductImage).find({
       where: { productId: product.id },
     });
     expect(images).toHaveLength(2);
     expect(images.every((image) => image.productId === product.id)).toBe(true);
+    expect(images[0]).toEqual(
+      expect.objectContaining({
+        url: expect.stringMatching(/^https:\/\//),
+        storageKey: expect.stringContaining(`ecommerce/products/${product.id}`),
+      }),
+    );
   });
 
   it('cascades Product image deletion while keeping Category and Brand RESTRICT', async () => {
@@ -66,9 +94,7 @@ describe('ProductImage PostgreSQL integration', () => {
       categoryId: category.id,
       brandId: brand.id,
     });
-    await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/cascade.jpg',
-    });
+    await imagesService.uploadForProduct(product.id, {}, validFile);
 
     const categoriesService = new CategoriesService(
       dataSource.getRepository(Category),
@@ -85,17 +111,37 @@ describe('ProductImage PostgreSQL integration', () => {
     await expect(
       dataSource.getRepository(ProductImage).countBy({ productId: product.id }),
     ).resolves.toBe(0);
+    expect(imageStorage.deleteImage).toHaveBeenCalled();
+  });
+
+  it('deletes image metadata before fake provider cleanup', async () => {
+    const product = await createProduct('image-delete');
+    const image = await imagesService.uploadForProduct(
+      product.id,
+      {},
+      validFile,
+    );
+
+    await imagesService.removeForProduct(product.id, image.id);
+
+    await expect(
+      dataSource.getRepository(ProductImage).findOneBy({ id: image.id }),
+    ).resolves.toBeNull();
+    expect(imageStorage.deleteImage).toHaveBeenCalledWith(image.storageKey);
   });
 
   it('switches primary atomically and the partial unique index rejects two primaries', async () => {
     const product = await createProduct('primary');
-    const first = await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/primary-1.jpg',
-      isPrimary: true,
-    });
-    const second = await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/primary-2.jpg',
-    });
+    const first = await imagesService.uploadForProduct(
+      product.id,
+      { isPrimary: true },
+      validFile,
+    );
+    const second = await imagesService.uploadForProduct(
+      product.id,
+      {},
+      validFile,
+    );
 
     await imagesService.updateForProduct(product.id, second.id, {
       isPrimary: true,
@@ -135,22 +181,21 @@ describe('ProductImage PostgreSQL integration', () => {
       stock: 3,
       categoryId: category.id,
     });
-    const first = await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/gallery-first.jpg',
-      position: 0,
-      storageKey: 'private/storage/key-first',
-    });
-    const second = await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/gallery-second.jpg',
-      position: 0,
-      storageKey: 'private/storage/key-second',
-    });
-    const primary = await imagesService.createForProduct(product.id, {
-      url: 'https://example.test/gallery-primary.jpg',
-      position: 50,
-      isPrimary: true,
-      storageKey: 'private/storage/key-primary',
-    });
+    const first = await imagesService.uploadForProduct(
+      product.id,
+      { position: 0 },
+      validFile,
+    );
+    const second = await imagesService.uploadForProduct(
+      product.id,
+      { position: 0 },
+      validFile,
+    );
+    const primary = await imagesService.uploadForProduct(
+      product.id,
+      { position: 50, isPrimary: true },
+      validFile,
+    );
 
     const detail = await productsService.findBySlug(product.slug);
     expect(detail.images.map((image) => image.id)).toEqual([

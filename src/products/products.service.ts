@@ -1,6 +1,7 @@
 import {
   ConflictException,
   Injectable,
+  Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -9,6 +10,7 @@ import { Brand } from '../brands/entities/brand.entity';
 import { isUniqueViolation } from '../catalog/database-errors';
 import { createSlug } from '../catalog/slug';
 import { Category } from '../categories/entities/category.entity';
+import { ImageStorageService } from '../image-storage/image-storage.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -23,6 +25,8 @@ export type PublicProduct = Omit<Product, 'images'> & {
 
 @Injectable()
 export class ProductsService {
+  private readonly logger = new Logger(ProductsService.name);
+
   constructor(
     @InjectRepository(Product)
     private readonly productsRepository: Repository<Product>,
@@ -30,6 +34,9 @@ export class ProductsService {
     private readonly categoriesRepository: Repository<Category>,
     @InjectRepository(Brand)
     private readonly brandsRepository: Repository<Brand>,
+    @InjectRepository(ProductImage)
+    private readonly productImagesRepository: Repository<ProductImage>,
+    private readonly imageStorage: ImageStorageService,
   ) {}
 
   async create(dto: CreateProductDto): Promise<Product> {
@@ -144,8 +151,23 @@ export class ProductsService {
   }
 
   async remove(id: number): Promise<void> {
+    const images = await this.productImagesRepository.find({
+      where: { productId: id },
+      select: { id: true, storageKey: true },
+    });
     const result = await this.productsRepository.delete(id);
     if (!result.affected) throw new NotFoundException('Product not found');
+
+    for (const image of images) {
+      if (!image.storageKey) continue;
+      try {
+        await this.imageStorage.deleteImage(image.storageKey);
+      } catch {
+        this.logger.error(
+          `Failed to clean up storage for image ${image.id} after deleting product ${id}`,
+        );
+      }
+    }
   }
 
   private async findCategory(id: number): Promise<Category> {
