@@ -44,5 +44,7 @@ export async function cleanTestDatabase(dataSource: DataSource): Promise<void> {
     await manager.query('DELETE FROM "orders"');
     await manager.query('DELETE FROM "products"');
     await manager.query('DELETE FROM "users"');
+    await manager.query('DELETE FROM "categories"');
+    await manager.query('DELETE FROM "brands"');
   });
 }

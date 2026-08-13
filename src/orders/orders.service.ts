@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import { Product } from '../products/entities/product.entity';
+import { ProductStatus } from '../products/entities/product-status.enum';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderItem } from './entities/order-item.entity';
@@ -44,6 +45,14 @@ export class OrdersService {
         }
 
         lockedProducts.push(product);
+      }
+
+      for (const product of lockedProducts) {
+        if (product.status === ProductStatus.INACTIVE) {
+          throw new BadRequestException(
+            `Sản phẩm ${product.name} hiện không được bán!`,
+          );
+        }
       }
 
       for (let index = 0; index < normalizedItems.length; index += 1) {

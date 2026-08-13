@@ -4,6 +4,8 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
 import { AppService } from './app.service';
 import { AuthModule } from './auth/auth.module';
+import { BrandsModule } from './brands/brands.module';
+import { CategoriesModule } from './categories/categories.module';
 import { createDatabaseOptions } from './database/database-options';
 import { databaseEntities } from './database/entities';
 import { OrdersModule } from './orders/orders.module';
@@ -29,6 +31,8 @@ import { UsersModule } from './users/users.module';
     OrdersModule,
     TelegramModule,
     AuthModule,
+    CategoriesModule,
+    BrandsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
