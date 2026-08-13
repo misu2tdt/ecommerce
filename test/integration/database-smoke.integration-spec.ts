@@ -1,5 +1,7 @@
 import { DataSource } from 'typeorm';
 import { Product } from '../../src/products/entities/product.entity';
+import { ProductStatus } from '../../src/products/entities/product-status.enum';
+import { createCategory } from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
 describe('PostgreSQL integration harness', () => {
@@ -22,12 +24,19 @@ describe('PostgreSQL integration harness', () => {
 
   it('persists and reads a Product through the migrated schema', async () => {
     const repository = dataSource.getRepository(Product);
+    const category = await createCategory(dataSource, 'smoke');
     const savedProduct = await repository.save(
       repository.create({
         name: 'Integration smoke product',
+        slug: 'integration-smoke-product',
         description: 'Created only in ecommerce_test',
         price: 12.34,
         stock: 3,
+        status: ProductStatus.ACTIVE,
+        categoryId: category.id,
+        category,
+        brandId: null,
+        brand: null,
       }),
     );
 

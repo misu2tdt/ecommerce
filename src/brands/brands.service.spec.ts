@@ -13,6 +13,7 @@ describe('BrandsService', () => {
     create: jest.fn(),
     save: jest.fn(),
     findOneBy: jest.fn(),
+    delete: jest.fn(),
   };
   let service: BrandsService;
 
@@ -71,5 +72,16 @@ describe('BrandsService', () => {
     await expect(service.update(1, { name: 'New' })).resolves.toEqual(
       expect.objectContaining({ name: 'New', slug: 'stable-slug' }),
     );
+  });
+
+  it('maps a referenced delete FK violation to ConflictException', async () => {
+    repository.delete.mockRejectedValue(
+      new QueryFailedError(
+        'DELETE',
+        [],
+        Object.assign(new Error('referenced'), { code: '23503' }),
+      ),
+    );
+    await expect(service.remove(1)).rejects.toBeInstanceOf(ConflictException);
   });
 });

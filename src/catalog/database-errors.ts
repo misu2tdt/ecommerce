@@ -7,3 +7,11 @@ export function isUniqueViolation(error: unknown): boolean {
       .driverError?.code === '23505'
   );
 }
+
+export function isForeignKeyViolation(error: unknown): boolean {
+  return (
+    error instanceof QueryFailedError &&
+    (error as QueryFailedError & { driverError?: { code?: string } })
+      .driverError?.code === '23503'
+  );
+}

@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { isUniqueViolation } from '../catalog/database-errors';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from '../catalog/database-errors';
 import { createSlug } from '../catalog/slug';
 import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
@@ -55,7 +58,14 @@ export class BrandsService {
   }
 
   async remove(id: number): Promise<void> {
-    const result = await this.brandsRepository.delete(id);
-    if (!result.affected) throw new NotFoundException('Brand not found');
+    try {
+      const result = await this.brandsRepository.delete(id);
+      if (!result.affected) throw new NotFoundException('Brand not found');
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new ConflictException('Brand is in use by a Product');
+      }
+      throw error;
+    }
   }
 }

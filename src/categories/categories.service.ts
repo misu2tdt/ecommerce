@@ -5,7 +5,10 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { isUniqueViolation } from '../catalog/database-errors';
+import {
+  isForeignKeyViolation,
+  isUniqueViolation,
+} from '../catalog/database-errors';
 import { createSlug } from '../catalog/slug';
 import { CreateCategoryDto } from './dto/create-category.dto';
 import { UpdateCategoryDto } from './dto/update-category.dto';
@@ -55,7 +58,14 @@ export class CategoriesService {
   }
 
   async remove(id: number): Promise<void> {
-    const result = await this.categoriesRepository.delete(id);
-    if (!result.affected) throw new NotFoundException('Category not found');
+    try {
+      const result = await this.categoriesRepository.delete(id);
+      if (!result.affected) throw new NotFoundException('Category not found');
+    } catch (error) {
+      if (isForeignKeyViolation(error)) {
+        throw new ConflictException('Category is in use by a Product');
+      }
+      throw error;
+    }
   }
 }

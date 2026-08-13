@@ -1,6 +1,7 @@
 import { BadRequestException, Logger } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Product } from '../products/entities/product.entity';
+import { ProductStatus } from '../products/entities/product-status.enum';
 import { TelegramService } from '../telegram/telegram.service';
 import { OrderItem } from './entities/order-item.entity';
 import { Order } from './entities/order.entity';
@@ -116,6 +117,22 @@ describe('OrdersService', () => {
     expect(telegramService.sendMessage).not.toHaveBeenCalled();
   });
 
+  it('rejects an inactive locked Product before stock mutation', async () => {
+    productRepo.findOne.mockResolvedValue(
+      createProduct({ status: ProductStatus.INACTIVE, stock: 5 }),
+    );
+
+    await expect(
+      service.checkout(7, {
+        items: [{ productId: 1, quantity: 1 }],
+      }),
+    ).rejects.toBeInstanceOf(BadRequestException);
+
+    expect(productRepo.save).not.toHaveBeenCalled();
+    expect(orderRepo.save).not.toHaveBeenCalled();
+    expect(telegramService.sendMessage).not.toHaveBeenCalled();
+  });
+
   it('propagates order-save failure and does not notify Telegram', async () => {
     const saveError = new Error('order save failed');
     productRepo.findOne.mockResolvedValue(createProduct({ stock: 5 }));
@@ -200,9 +217,7 @@ describe('OrdersService', () => {
   });
 
   it('rejects when an aggregated quantity exceeds locked stock', async () => {
-    productRepo.findOne.mockResolvedValue(
-      createProduct({ id: 5, stock: 2 }),
-    );
+    productRepo.findOne.mockResolvedValue(createProduct({ id: 5, stock: 2 }));
 
     await expect(
       service.checkout(7, {
@@ -266,7 +281,14 @@ function createProduct(overrides: Partial<Product> = {}): Product {
     description: 'Description',
     price: 10,
     stock: 5,
+    slug: 'product',
+    status: ProductStatus.ACTIVE,
+    categoryId: 1,
+    category: { id: 1 } as Product['category'],
+    brandId: null,
+    brand: null,
     createdAt: new Date(),
+    updatedAt: new Date(),
     ...overrides,
   };
 }

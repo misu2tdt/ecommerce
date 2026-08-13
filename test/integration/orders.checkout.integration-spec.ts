@@ -4,10 +4,12 @@ import { OrdersService } from '../../src/orders/orders.service';
 import { OrderItem } from '../../src/orders/entities/order-item.entity';
 import { Order } from '../../src/orders/entities/order.entity';
 import { Product } from '../../src/products/entities/product.entity';
+import { ProductStatus } from '../../src/products/entities/product-status.enum';
 import { TelegramService } from '../../src/telegram/telegram.service';
 import { UserRole } from '../../src/users/entities/user-role.enum';
 import { User } from '../../src/users/entities/user.entity';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
+import { createCategory } from './catalog-fixtures';
 
 const nonexistentUserId = 2_147_483_647;
 
@@ -37,12 +39,19 @@ describe('OrdersService PostgreSQL checkout integration', () => {
 
   it('rolls back a stock write when the later order insert violates the user FK', async () => {
     const productRepository = dataSource.getRepository(Product);
+    const category = await createCategory(dataSource, 'rollback');
     const product = await productRepository.save(
       productRepository.create({
         name: 'Rollback product',
+        slug: 'rollback-product',
         description: 'Rollback proof',
         price: 25,
         stock: 2,
+        status: ProductStatus.ACTIVE,
+        categoryId: category.id,
+        category,
+        brandId: null,
+        brand: null,
       }),
     );
     const querySpy = jest.spyOn(dataSource.logger, 'logQuery');
@@ -86,12 +95,19 @@ describe('OrdersService PostgreSQL checkout integration', () => {
   it('allows exactly one of two overlapping checkouts to buy the final unit', async () => {
     const productRepository = dataSource.getRepository(Product);
     const userRepository = dataSource.getRepository(User);
+    const category = await createCategory(dataSource, 'concurrency');
     const product = await productRepository.save(
       productRepository.create({
         name: 'Final stock product',
+        slug: 'final-stock-product',
         description: 'Concurrency proof',
         price: 40,
         stock: 1,
+        status: ProductStatus.ACTIVE,
+        categoryId: category.id,
+        category,
+        brandId: null,
+        brand: null,
       }),
     );
     const [userA, userB] = await userRepository.save([
