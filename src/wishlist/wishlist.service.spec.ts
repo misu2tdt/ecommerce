@@ -74,8 +74,8 @@ describe('WishlistService', () => {
       category: { id: 1, name: 'Category', slug: 'category' },
       brand: null,
       primaryImage: { url: 'https://example.test/main.jpg', altText: null },
-      minPrice: '10.00',
-      maxPrice: '20.00',
+      minPrice: 100_000,
+      maxPrice: 200_000,
       inStock: true,
     });
     expect(result[0].product.primaryImage).not.toHaveProperty('storageKey');
@@ -124,6 +124,6 @@ function wishlistResult() {
         },
       } as WishlistItem,
     ],
-    raw: [{ minPrice: '10.00', maxPrice: '20.00', inStock: true }],
+    raw: [{ minPrice: '100000', maxPrice: '200000', inStock: true }],
   };
 }

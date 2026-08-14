@@ -14,7 +14,7 @@ import { PaymentsService } from './payments.service';
 
 describe('PaymentsService state rules', () => {
   const provider = new FakePaymentProvider();
-  const service = new PaymentsService({} as DataSource, provider, 'USD');
+  const service = new PaymentsService({} as DataSource, provider, 'VND');
 
   it('requires a normalized safe idempotency key before database work', () => {
     const normalize = privateMethod<(value?: string) => string>(
@@ -142,8 +142,8 @@ function paymentFixture(overrides: Partial<Payment> = {}): Payment {
     provider: 'fake',
     providerPaymentId: 'fake_payment_1',
     idempotencyKey: 'payment-key-001',
-    amount: 40,
-    currency: 'USD',
+    amount: 400_000,
+    currency: 'VND',
     status: PaymentStatus.PROCESSING,
     failureCode: null,
     failureMessage: null,
@@ -159,7 +159,7 @@ function orderFixture(overrides: Partial<Order> = {}): Order {
     id: 3,
     userId: 7,
     user: { id: 7 } as Order['user'],
-    totalPrice: 40,
+    totalPrice: 400_000,
     status: OrderStatus.PENDING,
     shippingAddress: {} as Order['shippingAddress'],
     items: [],

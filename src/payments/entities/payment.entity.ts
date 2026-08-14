@@ -11,6 +11,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { Order } from '../../orders/entities/order.entity';
+import { VND_MAX_AMOUNT, vndMoneyTransformer } from '../../money/vnd-money';
 import { PaymentEvent } from './payment-event.entity';
 import { PaymentStatus } from './payment-status.enum';
 
@@ -21,7 +22,7 @@ import { PaymentStatus } from './payment-status.enum';
   where: '"providerPaymentId" IS NOT NULL',
 })
 @Index('IDX_payments_order_status', ['orderId', 'status'])
-@Check('CHK_payments_amount', '"amount" >= 0')
+@Check('CHK_payments_amount', `"amount" >= 0 AND "amount" <= ${VND_MAX_AMOUNT}`)
 @Check(
   'CHK_payments_status',
   `"status" IN ('pending', 'processing', 'succeeded', 'failed', 'cancelled')`,
@@ -52,7 +53,7 @@ export class Payment {
   @Column({ type: 'varchar', length: 128 })
   idempotencyKey!: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'bigint', transformer: vndMoneyTransformer })
   amount!: number;
 
   @Column({ type: 'char', length: 3 })

@@ -77,7 +77,7 @@ describe('Addresses and Order lifecycle PostgreSQL integration', () => {
     const owner = await createUser('snapshot-owner');
     const other = await createUser('snapshot-other');
     const address = await addresses.create(owner.id, addressDto('snapshot'));
-    const variant = await setupVariant('snapshot', 5, 20);
+    const variant = await setupVariant('snapshot', 5, 200_000);
     const order = await orders.checkout(owner.id, {
       addressId: address.id,
       items: [{ variantId: variant.id, quantity: 1 }],
@@ -104,7 +104,7 @@ describe('Addresses and Order lifecycle PostgreSQL integration', () => {
   it('restores inventory exactly once under concurrent duplicate cancellation', async () => {
     const user = await createUser('cancel-concurrent');
     const address = await addresses.create(user.id, addressDto('cancel'));
-    const variant = await setupVariant('cancel-concurrent', 5, 20);
+    const variant = await setupVariant('cancel-concurrent', 5, 200_000);
     const order = await orders.checkout(user.id, {
       addressId: address.id,
       items: [{ variantId: variant.id, quantity: 2 }],
@@ -130,7 +130,7 @@ describe('Addresses and Order lifecycle PostgreSQL integration', () => {
   it('allows only forward admin lifecycle and never restocks normal transitions', async () => {
     const user = await createUser('lifecycle');
     const address = await addresses.create(user.id, addressDto('lifecycle'));
-    const variant = await setupVariant('lifecycle', 5, 20);
+    const variant = await setupVariant('lifecycle', 5, 200_000);
     const order = await orders.checkout(user.id, {
       addressId: address.id,
       items: [{ variantId: variant.id, quantity: 2 }],
@@ -155,7 +155,7 @@ describe('Addresses and Order lifecycle PostgreSQL integration', () => {
   it('keeps Address snapshot, Order, stock decrement and Cart clear atomic', async () => {
     const user = await createUser('cart-address');
     const address = await addresses.create(user.id, addressDto('cart'));
-    const variant = await setupVariant('cart-address', 4, 30);
+    const variant = await setupVariant('cart-address', 4, 300_000);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 2 });
     const order = await carts.checkout(user.id, address.id);
     expect(order.shippingAddress).toEqual(

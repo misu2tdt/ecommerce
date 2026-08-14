@@ -57,14 +57,14 @@ describe('Product variant catalog PostgreSQL integration', () => {
     const first = await variants.createForProduct(product.id, {
       sku: ' sku-black ',
       name: 'Black',
-      price: 100,
+      price: 1_000_000,
       stock: 2,
       attributes: { color: 'Black' },
     });
     await variants.createForProduct(product.id, {
       sku: 'SKU-WHITE',
       name: 'White',
-      price: 120,
+      price: 1_200_000,
       stock: 3,
     });
     expect(first.sku).toBe('SKU-BLACK');
@@ -72,7 +72,7 @@ describe('Product variant catalog PostgreSQL integration', () => {
       variants.createForProduct(product.id, {
         sku: 'sku-black',
         name: 'Duplicate',
-        price: 1,
+        price: 10_000,
         stock: 0,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -90,25 +90,25 @@ describe('Product variant catalog PostgreSQL integration', () => {
       categoryId: category.id,
     });
     await createVariant(dataSource, product, 'summary-a', {
-      price: 100,
+      price: 1_000_000,
       stock: 0,
       position: 10,
     });
     const active = await createVariant(dataSource, product, 'summary-b', {
-      price: 80,
+      price: 800_000,
       stock: 2,
       position: 0,
     });
     await createVariant(dataSource, product, 'summary-hidden', {
-      price: 1,
+      price: 10_000,
       stock: 99,
       isActive: false,
     });
     const [listed] = await products.findAll({ category: category.slug });
     expect(listed).toEqual(
       expect.objectContaining({
-        minPrice: '80.00',
-        maxPrice: '100.00',
+        minPrice: 800_000,
+        maxPrice: 1_000_000,
         inStock: true,
       }),
     );

@@ -46,14 +46,13 @@ export function getJwtExpiration(
 
 export function getPaymentCurrency(
   reader: ConfigReader,
-  fallback = 'USD',
+  fallback = 'VND',
 ): string {
   const configured = reader('PAYMENT_CURRENCY');
   const currency =
     typeof configured === 'string' && configured.trim().length > 0
       ? configured.trim().toUpperCase()
       : fallback;
-  if (!/^[A-Z]{3}$/.test(currency))
-    throw new Error('PAYMENT_CURRENCY must be a 3-letter currency code');
+  if (currency !== 'VND') throw new Error('PAYMENT_CURRENCY must be VND');
   return currency;
 }

@@ -1,2 +1,2 @@
 export const PAYMENT_CURRENCY = Symbol('PAYMENT_CURRENCY');
-export const DEFAULT_PAYMENT_CURRENCY = 'USD';
+export const DEFAULT_PAYMENT_CURRENCY = 'VND';

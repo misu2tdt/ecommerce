@@ -131,13 +131,17 @@ describe('CartsService', () => {
     viewRepo.findOneOrFail.mockResolvedValue({
       ...cart,
       items: [
-        { id: 8, quantity: 2, variant: variant({ price: 12.5, stock: 1 }) },
+        {
+          id: 8,
+          quantity: 2,
+          variant: variant({ price: 125_000, stock: 1 }),
+        },
       ],
     });
     const result = await service.getCart(7);
-    expect(result.totalPrice).toBe(25);
+    expect(result.totalPrice).toBe(250_000);
     expect(result.items[0]).toEqual(
-      expect.objectContaining({ lineTotal: 25, available: false }),
+      expect.objectContaining({ lineTotal: 250_000, available: false }),
     );
     expect(result.items[0].variant.product).toEqual(
       expect.objectContaining({
@@ -211,7 +215,7 @@ function variant(overrides: Record<string, unknown> = {}) {
     productId: 3,
     sku: 'SKU-2',
     name: 'Blue',
-    price: 10,
+    price: 100_000,
     stock: 5,
     attributes: { color: 'blue' },
     isActive: true,

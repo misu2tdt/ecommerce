@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { addVndAmounts, multiplyVndAmount } from '../money/vnd-money';
 import { OrdersService } from '../orders/orders.service';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { ProductVariant } from '../products/entities/product-variant.entity';
@@ -140,11 +141,11 @@ export class CartsService {
     const items = cart.items.map((item) => {
       const variant = item.variant;
       const product = variant.product;
-      const price = Number(variant.price);
+      const price = variant.price;
       return {
         id: item.id,
         quantity: item.quantity,
-        lineTotal: price * item.quantity,
+        lineTotal: multiplyVndAmount(price, item.quantity),
         available:
           product.status === ProductStatus.ACTIVE &&
           variant.isActive &&
@@ -172,7 +173,10 @@ export class CartsService {
       id: cart.id,
       userId: cart.userId,
       items,
-      totalPrice: items.reduce((total, item) => total + item.lineTotal, 0),
+      totalPrice: items.reduce(
+        (total, item) => addVndAmounts(total, item.lineTotal),
+        0,
+      ),
       createdAt: cart.createdAt,
       updatedAt: cart.updatedAt,
     };

@@ -44,7 +44,7 @@ describe('Variant checkout PostgreSQL integration', () => {
   });
 
   it('rolls back Variant stock and Order after a later atomic checkout failure', async () => {
-    const variant = await setupVariant('rollback', 2, 25);
+    const variant = await setupVariant('rollback', 2, 250_000);
     const user = await dataSource.getRepository(User).save({
       email: 'rollback@example.test',
       password: 'hash',
@@ -85,7 +85,7 @@ describe('Variant checkout PostgreSQL integration', () => {
   });
 
   it('allows exactly one overlapping checkout for final Variant unit', async () => {
-    const variant = await setupVariant('concurrency', 1, 40);
+    const variant = await setupVariant('concurrency', 1, 400_000);
     const users = await dataSource.getRepository(User).save([
       { email: 'a@example.test', password: 'hash', role: UserRole.USER },
       { email: 'b@example.test', password: 'hash', role: UserRole.USER },
@@ -144,7 +144,7 @@ describe('Variant checkout PostgreSQL integration', () => {
   }, 15_000);
 
   it('protects ordered Variant and Product history from hard delete', async () => {
-    const variant = await setupVariant('history', 2, 10);
+    const variant = await setupVariant('history', 2, 100_000);
     const user = await dataSource.getRepository(User).save({
       email: 'history@example.test',
       password: 'hash',

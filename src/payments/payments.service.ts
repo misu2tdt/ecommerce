@@ -45,7 +45,7 @@ export class PaymentsService {
         const providerResult = await this.paymentProvider.createPayment({
           paymentId: payment.id,
           orderId: payment.orderId,
-          amount: Number(payment.amount),
+          amount: payment.amount,
           currency: payment.currency,
           idempotencyKey: payment.idempotencyKey,
         });
@@ -339,7 +339,7 @@ export class PaymentsService {
     return {
       id: payment.id,
       provider: payment.provider,
-      amount: Number(payment.amount),
+      amount: payment.amount,
       currency: payment.currency,
       status: payment.status,
       createdAt: payment.createdAt,

@@ -14,6 +14,7 @@ import {
 import { createSlug } from '../catalog/slug';
 import { Category } from '../categories/entities/category.entity';
 import { ImageStorageService } from '../image-storage/image-storage.service';
+import { parseVndAmount } from '../money/vnd-money';
 import { CreateProductDto } from './dto/create-product.dto';
 import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
@@ -25,8 +26,8 @@ import { Product } from './entities/product.entity';
 export type PublicProductImage = Omit<ProductImage, 'storageKey' | 'product'>;
 export type PublicProduct = Omit<Product, 'images' | 'variants'> & {
   images: PublicProductImage[];
-  minPrice: string | null;
-  maxPrice: string | null;
+  minPrice: number | null;
+  maxPrice: number | null;
   inStock: boolean;
   averageRating: number | null;
   reviewCount: number;
@@ -142,8 +143,14 @@ export class ProductsService {
 
     return entities.map((product, index) =>
       this.toPublicProduct(product, {
-        minPrice: raw[index].minPrice ?? null,
-        maxPrice: raw[index].maxPrice ?? null,
+        minPrice:
+          raw[index].minPrice === null
+            ? null
+            : parseVndAmount(raw[index].minPrice),
+        maxPrice:
+          raw[index].maxPrice === null
+            ? null
+            : parseVndAmount(raw[index].maxPrice),
         inStock: raw[index].inStock === true,
         averageRating:
           raw[index].averageRating === null
@@ -186,10 +193,10 @@ export class ProductsService {
     const product = entities[0];
     if (!product) throw new NotFoundException('Product not found');
     const variants = product.variants ?? [];
-    const prices = variants.map((variant) => Number(variant.price));
+    const prices = variants.map((variant) => variant.price);
     return this.toPublicProduct(product, {
-      minPrice: prices.length ? Math.min(...prices).toFixed(2) : null,
-      maxPrice: prices.length ? Math.max(...prices).toFixed(2) : null,
+      minPrice: prices.length ? Math.min(...prices) : null,
+      maxPrice: prices.length ? Math.max(...prices) : null,
       inStock: variants.some((variant) => variant.stock > 0),
       averageRating:
         raw[0].averageRating === null ? null : Number(raw[0].averageRating),

@@ -57,7 +57,7 @@ describe('Shopping cart PostgreSQL integration', () => {
 
   it('atomically increments concurrent adds without reserving Variant stock', async () => {
     const user = await createUser('concurrent-add');
-    const variant = await setupVariant('concurrent-add', 3, 19);
+    const variant = await setupVariant('concurrent-add', 3, 190_000);
     await Promise.all([
       carts.addItem(user.id, { variantId: variant.id, quantity: 2 }),
       carts.addItem(user.id, { variantId: variant.id, quantity: 4 }),
@@ -86,26 +86,26 @@ describe('Shopping cart PostgreSQL integration', () => {
 
   it('returns current Variant price, stock, totals and availability', async () => {
     const user = await createUser('current-values');
-    const variant = await setupVariant('current-values', 4, 10);
+    const variant = await setupVariant('current-values', 4, 100_000);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 3 });
     await dataSource.getRepository(ProductVariant).update(variant.id, {
-      price: 12.5,
+      price: 125_000,
       stock: 2,
     });
     const result = await carts.getCart(user.id);
-    expect(result.totalPrice).toBe(37.5);
+    expect(result.totalPrice).toBe(375_000);
     expect(result.items[0]).toEqual(
-      expect.objectContaining({ lineTotal: 37.5, available: false }),
+      expect.objectContaining({ lineTotal: 375_000, available: false }),
     );
     expect(result.items[0].variant).toEqual(
-      expect.objectContaining({ price: 12.5, stock: 2 }),
+      expect.objectContaining({ price: 125_000, stock: 2 }),
     );
   });
 
   it('checks out through the existing Variant lock path and atomically empties Cart', async () => {
     const user = await createUser('checkout-success');
     const address = await createAddress(dataSource, user, 'checkout-success');
-    const variant = await setupVariant('checkout-success', 5, 15);
+    const variant = await setupVariant('checkout-success', 5, 150_000);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 2 });
     const querySpy = jest.spyOn(dataSource.logger, 'logQuery');
     const order = await carts.checkout(user.id, address.id);
@@ -117,7 +117,7 @@ describe('Shopping cart PostgreSQL integration', () => {
           query.includes('"product_variants"') && query.includes('FOR UPDATE'),
       ),
     ).toBe(true);
-    expect(order.totalPrice).toBe(30);
+    expect(order.totalPrice).toBe(300_000);
     await expect(dataSource.getRepository(Order).count()).resolves.toBe(1);
     await expect(dataSource.getRepository(OrderItem).count()).resolves.toBe(1);
     await expect(dataSource.getRepository(CartItem).count()).resolves.toBe(0);
@@ -133,7 +133,7 @@ describe('Shopping cart PostgreSQL integration', () => {
   it('rolls back stock and Order while preserving Cart on insufficient stock', async () => {
     const user = await createUser('checkout-failure');
     const address = await createAddress(dataSource, user, 'checkout-failure');
-    const variant = await setupVariant('checkout-failure', 1, 15);
+    const variant = await setupVariant('checkout-failure', 1, 150_000);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 2 });
     await expect(carts.checkout(user.id, address.id)).rejects.toBeInstanceOf(
       BadRequestException,
@@ -152,7 +152,7 @@ describe('Shopping cart PostgreSQL integration', () => {
   it('returns 404 when a user tries to mutate another user CartItem', async () => {
     const owner = await createUser('owner');
     const other = await createUser('other');
-    const variant = await setupVariant('ownership', 5, 15);
+    const variant = await setupVariant('ownership', 5, 150_000);
     const ownerCart = await carts.addItem(owner.id, {
       variantId: variant.id,
       quantity: 1,

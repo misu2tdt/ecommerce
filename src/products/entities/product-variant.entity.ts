@@ -12,11 +12,15 @@ import {
 } from 'typeorm';
 import { OrderItem } from '../../orders/entities/order-item.entity';
 import { CartItem } from '../../carts/entities/cart-item.entity';
+import { VND_MAX_AMOUNT, vndMoneyTransformer } from '../../money/vnd-money';
 import { Product } from './product.entity';
 
 @Entity('product_variants')
 @Index('UQ_product_variants_sku', ['sku'], { unique: true })
-@Check('CHK_product_variants_price', '"price" >= 0')
+@Check(
+  'CHK_product_variants_price',
+  `"price" >= 0 AND "price" <= ${VND_MAX_AMOUNT}`,
+)
 @Check('CHK_product_variants_stock', '"stock" >= 0')
 @Check('CHK_product_variants_position', '"position" >= 0')
 export class ProductVariant {
@@ -42,7 +46,7 @@ export class ProductVariant {
   @Column({ type: 'varchar', length: 255 })
   name!: string;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'bigint', transformer: vndMoneyTransformer })
   price!: number;
 
   @Column({ type: 'int', default: 0 })

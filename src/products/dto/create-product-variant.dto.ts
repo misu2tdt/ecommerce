@@ -3,17 +3,18 @@ import {
   IsBoolean,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsObject,
   IsOptional,
   IsString,
   MaxLength,
+  Max,
   Min,
   registerDecorator,
   ValidationArguments,
   ValidationOptions,
 } from 'class-validator';
 import { Trim } from '../../catalog/dto-validation';
+import { VND_MAX_AMOUNT } from '../../money/vnd-money';
 
 export class CreateProductVariantDto {
   @Transform(({ value }: { value: unknown }) =>
@@ -30,8 +31,9 @@ export class CreateProductVariantDto {
   @MaxLength(255)
   name!: string;
 
-  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsInt()
   @Min(0)
+  @Max(VND_MAX_AMOUNT)
   price!: number;
 
   @IsInt()

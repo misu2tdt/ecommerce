@@ -61,7 +61,7 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
     const { product, variant } = await setupProduct(
       'wishlist-concurrent',
       4,
-      15,
+      150_000,
     );
     await Promise.all([
       wishlist.add(user.id, product.id),
@@ -78,7 +78,7 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
   it('enforces Wishlist ownership and retains inactive Product availability', async () => {
     const owner = await createUser('wishlist-owner');
     const other = await createUser('wishlist-other');
-    const { product } = await setupProduct('wishlist-owner', 2, 12);
+    const { product } = await setupProduct('wishlist-owner', 2, 120_000);
     await wishlist.add(owner.id, product.id);
     await expect(wishlist.remove(other.id, product.id)).rejects.toBeInstanceOf(
       NotFoundException,
@@ -92,8 +92,8 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
       expect.objectContaining({
         status: ProductStatus.INACTIVE,
         available: false,
-        minPrice: '12.00',
-        maxPrice: '12.00',
+        minPrice: 120_000,
+        maxPrice: 120_000,
         inStock: true,
       }),
     );
@@ -105,7 +105,7 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
     const { product, variant } = await setupProduct(
       'review-eligibility',
       5,
-      20,
+      200_000,
     );
     await checkoutAndDeliver(deliveredUser, variant);
     await checkout(pendingUser, variant);
@@ -135,7 +135,7 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
 
   it('enforces the database rating CHECK independently of DTO validation', async () => {
     const user = await createUser('review-check');
-    const { product } = await setupProduct('review-check', 1, 10);
+    const { product } = await setupProduct('review-check', 1, 100_000);
     await expect(
       dataSource.getRepository(ProductReview).save({
         userId: user.id,
@@ -151,7 +151,11 @@ describe('Wishlist and verified Product reviews PostgreSQL integration', () => {
   it('excludes hidden reviews from public read and Product rating summary', async () => {
     const firstUser = await createUser('review-summary-a');
     const secondUser = await createUser('review-summary-b');
-    const { product, variant } = await setupProduct('review-summary', 5, 20);
+    const { product, variant } = await setupProduct(
+      'review-summary',
+      5,
+      200_000,
+    );
     await checkoutAndDeliver(firstUser, variant);
     await checkoutAndDeliver(secondUser, variant);
     const first = await reviews.create(firstUser.id, product.id, { rating: 5 });

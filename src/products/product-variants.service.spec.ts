@@ -34,7 +34,7 @@ describe('ProductVariantsService', () => {
       service.createForProduct(1, {
         sku: ' ip17-blk ',
         name: 'Black',
-        price: 10,
+        price: 24_990_000,
         stock: 2,
       }),
     ).resolves.toEqual(
@@ -111,6 +111,33 @@ describe('ProductVariantsService', () => {
       position: -1,
     });
     await expect(validate(dto)).resolves.toHaveLength(3);
+  });
+
+  it('accepts whole VND and rejects fractional Variant prices', async () => {
+    const integer = plainToInstance(CreateProductVariantDto, {
+      sku: 'VND-INTEGER',
+      name: 'Integer VND',
+      price: 24_990_000,
+      stock: 1,
+    });
+    const fractional = plainToInstance(CreateProductVariantDto, {
+      sku: 'VND-FRACTION',
+      name: 'Fractional VND',
+      price: 24_999.5,
+      stock: 1,
+    });
+    const numericString = plainToInstance(CreateProductVariantDto, {
+      sku: 'VND-STRING',
+      name: 'String VND',
+      price: '24990000',
+      stock: 1,
+    });
+
+    await expect(validate(integer)).resolves.toHaveLength(0);
+    const errors = await validate(fractional);
+    expect(errors.some((error) => error.property === 'price')).toBe(true);
+    const stringErrors = await validate(numericString);
+    expect(stringErrors.some((error) => error.property === 'price')).toBe(true);
   });
 
   it('rejects nested or non-string attributes', async () => {

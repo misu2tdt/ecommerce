@@ -6,9 +6,12 @@ import {
   PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
+import { VND_MAX_AMOUNT, vndMoneyTransformer } from '../../money/vnd-money';
 import { Order } from './order.entity';
+import { Check } from 'typeorm';
 
 @Entity('order_items')
+@Check('CHK_order_items_price', `"price" >= 0 AND "price" <= ${VND_MAX_AMOUNT}`)
 export class OrderItem {
   @PrimaryGeneratedColumn()
   id!: number;
@@ -16,7 +19,7 @@ export class OrderItem {
   @Column({ type: 'int' })
   quantity!: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2 })
+  @Column({ type: 'bigint', transformer: vndMoneyTransformer })
   price!: number;
 
   @Column({ type: 'int' })

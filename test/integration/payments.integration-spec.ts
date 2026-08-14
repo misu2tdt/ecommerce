@@ -39,7 +39,7 @@ describe('Payment foundation PostgreSQL integration', () => {
   beforeEach(async () => {
     await cleanTestDatabase(dataSource);
     provider = new FakePaymentProvider();
-    payments = new PaymentsService(dataSource, provider, 'USD');
+    payments = new PaymentsService(dataSource, provider, 'VND');
     orders = new OrdersService(dataSource, {
       sendMessage: jest.fn().mockResolvedValue(undefined),
     } as unknown as TelegramService);
@@ -63,8 +63,8 @@ describe('Payment foundation PostgreSQL integration', () => {
 
     expect(result).toEqual(
       expect.objectContaining({
-        amount: 40,
-        currency: 'USD',
+        amount: 400_000,
+        currency: 'VND',
         status: PaymentStatus.PROCESSING,
       }),
     );
@@ -230,7 +230,7 @@ describe('Payment foundation PostgreSQL integration', () => {
       brandId: null,
     });
     const variant = await createVariant(dataSource, product, suffix, {
-      price: 20,
+      price: 200_000,
       stock: 5,
     });
     const order = await orders.checkout(user.id, {

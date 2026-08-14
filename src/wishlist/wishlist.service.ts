@@ -4,6 +4,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource } from 'typeorm';
+import { parseVndAmount } from '../money/vnd-money';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { Product } from '../products/entities/product.entity';
 import { WishlistItem } from './entities/wishlist-item.entity';
@@ -104,8 +105,14 @@ export class WishlistService {
               altText: item.product.images[0].altText,
             }
           : null,
-        minPrice: raw[index].minPrice ?? null,
-        maxPrice: raw[index].maxPrice ?? null,
+        minPrice:
+          raw[index].minPrice === null
+            ? null
+            : parseVndAmount(raw[index].minPrice),
+        maxPrice:
+          raw[index].maxPrice === null
+            ? null
+            : parseVndAmount(raw[index].maxPrice),
         inStock: raw[index].inStock === true || raw[index].inStock === 'true',
       },
     }));

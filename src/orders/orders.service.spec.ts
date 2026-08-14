@@ -103,6 +103,18 @@ describe('OrdersService lifecycle', () => {
     expect(created.shippingAddress.recipientName).toBe('Recipient');
   });
 
+  it('uses explicit VND semantics in the Order notification', async () => {
+    await service.checkout(7, {
+      addressId: 12,
+      items: [{ variantId: 1, quantity: 1 }],
+    });
+
+    expect(telegram.sendMessage).toHaveBeenCalledWith(
+      expect.stringContaining('100000 VND'),
+    );
+    expect(telegram.sendMessage.mock.calls[0][0]).not.toContain('$');
+  });
+
   it('aggregates duplicates and locks unique Variant IDs in ascending order', async () => {
     variantRepo.findOne.mockImplementation(async ({ where }) =>
       variant({ id: where.id, stock: 5 }),
@@ -260,7 +272,7 @@ function order(overrides: Partial<Order> = {}): Order {
     id: 3,
     userId: 7,
     user: { id: 7 } as Order['user'],
-    totalPrice: 10,
+    totalPrice: 100_000,
     status: OrderStatus.PENDING,
     shippingAddress: {
       recipientName: 'Recipient',
@@ -289,7 +301,7 @@ function orderItem(): OrderItem {
     variantId: 1,
     variant: variant(),
     quantity: 1,
-    price: 10,
+    price: 100_000,
   };
 }
 
@@ -317,7 +329,7 @@ function variant(overrides: Partial<ProductVariant> = {}): ProductVariant {
     product: product(),
     sku: 'SKU-1',
     name: 'Default',
-    price: 10,
+    price: 100_000,
     stock: 5,
     attributes: {},
     isActive: true,

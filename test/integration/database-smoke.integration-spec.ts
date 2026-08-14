@@ -1,6 +1,7 @@
-import { DataSource } from 'typeorm';
+import { DataSource, QueryFailedError } from 'typeorm';
 import { Product } from '../../src/products/entities/product.entity';
 import { ProductStatus } from '../../src/products/entities/product-status.enum';
+import { ProductVariant } from '../../src/products/entities/product-variant.entity';
 import { createCategory, createVariant } from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
@@ -41,13 +42,25 @@ describe('PostgreSQL integration harness', () => {
       dataSource,
       savedProduct,
       'smoke',
-      { price: 12.34, stock: 3 },
+      { price: 123_400, stock: 3 },
     );
 
     const product = await repository.findOneByOrFail({ id: savedProduct.id });
 
     expect(product.name).toBe('Integration smoke product');
     expect(savedVariant.stock).toBe(3);
-    expect(Number(savedVariant.price)).toBe(12.34);
+    expect(savedVariant.price).toBe(123_400);
+
+    await expect(
+      dataSource.getRepository(ProductVariant).update(savedVariant.id, {
+        price: 123_400.5,
+      }),
+    ).rejects.toBeInstanceOf(RangeError);
+    await expect(
+      dataSource.query(
+        'UPDATE "product_variants" SET "price" = $1 WHERE "id" = $2',
+        [123_400.5, savedVariant.id],
+      ),
+    ).rejects.toBeInstanceOf(QueryFailedError);
   });
 });

@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Address } from '../addresses/entities/address.entity';
+import { addVndAmounts, multiplyVndAmount } from '../money/vnd-money';
 import { PaymentStatus } from '../payments/entities/payment-status.enum';
 import { Payment } from '../payments/entities/payment.entity';
 import { ProductStatus } from '../products/entities/product-status.enum';
@@ -106,7 +107,10 @@ export class OrdersService {
       for (let index = 0; index < normalizedItems.length; index += 1) {
         const requested = normalizedItems[index];
         const variant = locked[index].variant;
-        totalPrice += Number(variant.price) * requested.quantity;
+        totalPrice = addVndAmounts(
+          totalPrice,
+          multiplyVndAmount(variant.price, requested.quantity),
+        );
         variant.stock -= requested.quantity;
         await variantRepo.save(variant);
         items.push(
@@ -137,7 +141,7 @@ export class OrdersService {
       return order;
     });
 
-    const message = `New order for user ${userId}; total $${savedOrder.totalPrice}; status ${savedOrder.status}`;
+    const message = `New order for user ${userId}; total ${savedOrder.totalPrice} VND; status ${savedOrder.status}`;
     void this.telegramService
       .sendMessage(message)
       .catch(() => this.logger.error('Unable to send order notification'));
@@ -281,15 +285,15 @@ export class OrdersService {
       id: order.id,
       userId: order.userId,
       status: order.status,
-      totalPrice: Number(order.totalPrice),
+      totalPrice: order.totalPrice,
       shippingAddress: order.shippingAddress,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       items: order.items.map((item) => ({
         id: item.id,
         quantity: item.quantity,
-        price: Number(item.price),
-        lineTotal: Number(item.price) * item.quantity,
+        price: item.price,
+        lineTotal: multiplyVndAmount(item.price, item.quantity),
         variant: {
           id: item.variant.id,
           sku: item.variant.sku,

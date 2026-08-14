@@ -32,7 +32,7 @@ export async function createVariant(
       product,
       sku: `SKU-${suffix}`.toUpperCase(),
       name: `Variant ${suffix}`,
-      price: 10,
+      price: 100_000,
       stock: 5,
       attributes: {},
       isActive: true,
