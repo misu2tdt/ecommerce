@@ -2,7 +2,6 @@ import {
   IsInt,
   IsEnum,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -19,14 +18,6 @@ export class CreateProductDto {
   @IsOptional()
   @IsString()
   description?: string;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  price!: number;
-
-  @IsInt()
-  @Min(0)
-  stock!: number;
 
   @IsInt()
   @Min(1)

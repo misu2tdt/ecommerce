@@ -1,21 +1,21 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { Product } from '../products/entities/product.entity';
 import { ProductStatus } from '../products/entities/product-status.enum';
+import { ProductVariant } from '../products/entities/product-variant.entity';
+import { Product } from '../products/entities/product.entity';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderItem } from './entities/order-item.entity';
 import { Order } from './entities/order.entity';
 
 interface NormalizedOrderItem {
-  productId: number;
+  variantId: number;
   quantity: number;
 }
 
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
-
   constructor(
     private readonly dataSource: DataSource,
     private readonly telegramService: TelegramService,
@@ -23,104 +23,86 @@ export class OrdersService {
 
   async checkout(userId: number, createOrderDto: CreateOrderDto) {
     const normalizedItems = this.normalizeItems(createOrderDto);
-
     const savedOrder = await this.dataSource.transaction(async (manager) => {
+      const variantRepo = manager.getRepository(ProductVariant);
       const productRepo = manager.getRepository(Product);
       const orderRepo = manager.getRepository(Order);
       const orderItemRepo = manager.getRepository(OrderItem);
-      const lockedProducts: Product[] = [];
-      let totalPrice = 0;
-      const orderItemsToSave: OrderItem[] = [];
+      const locked: Array<{ variant: ProductVariant; product: Product }> = [];
 
       for (const item of normalizedItems) {
-        const product = await productRepo.findOne({
-          where: { id: item.productId },
+        const variant = await variantRepo.findOne({
+          where: { id: item.variantId },
           lock: { mode: 'pessimistic_write' },
         });
-
-        if (!product) {
+        if (!variant)
           throw new BadRequestException(
-            `Sản phẩm ID ${item.productId} không tồn tại!`,
+            `Variant ID ${item.variantId} does not exist`,
           );
-        }
-
-        lockedProducts.push(product);
+        const product = await productRepo.findOneBy({ id: variant.productId });
+        if (!product)
+          throw new BadRequestException('Variant Product does not exist');
+        locked.push({ variant, product });
       }
 
-      for (const product of lockedProducts) {
-        if (product.status === ProductStatus.INACTIVE) {
-          throw new BadRequestException(
-            `Sản phẩm ${product.name} hiện không được bán!`,
-          );
-        }
+      for (const { variant, product } of locked) {
+        if (!variant.isActive)
+          throw new BadRequestException(`Variant ${variant.name} is inactive`);
+        if (product.status === ProductStatus.INACTIVE)
+          throw new BadRequestException(`Product ${product.name} is inactive`);
       }
-
       for (let index = 0; index < normalizedItems.length; index += 1) {
-        const item = normalizedItems[index];
-        const product = lockedProducts[index];
-
-        if (product.stock < item.quantity) {
+        if (locked[index].variant.stock < normalizedItems[index].quantity) {
           throw new BadRequestException(
-            `Sản phẩm ${product.name} chỉ còn ${product.stock} cái, không đủ để bán!`,
+            `Variant ${locked[index].variant.name} has insufficient stock`,
           );
         }
       }
 
+      let totalPrice = 0;
+      const items: OrderItem[] = [];
       for (let index = 0; index < normalizedItems.length; index += 1) {
-        const item = normalizedItems[index];
-        const product = lockedProducts[index];
-
-        totalPrice += product.price * item.quantity;
-        product.stock -= item.quantity;
-        await productRepo.save(product);
-
-        orderItemsToSave.push(
+        const requested = normalizedItems[index];
+        const variant = locked[index].variant;
+        totalPrice += Number(variant.price) * requested.quantity;
+        variant.stock -= requested.quantity;
+        await variantRepo.save(variant);
+        items.push(
           orderItemRepo.create({
-            product,
-            quantity: item.quantity,
-            price: product.price,
+            variant,
+            variantId: variant.id,
+            quantity: requested.quantity,
+            price: variant.price,
           }),
         );
       }
 
-      const order = orderRepo.create({
-        user: { id: userId },
-        totalPrice,
-        status: 'pending',
-        items: orderItemsToSave,
-      });
-
-      return orderRepo.save(order);
+      return orderRepo.save(
+        orderRepo.create({
+          user: { id: userId },
+          totalPrice,
+          status: 'pending',
+          items,
+        }),
+      );
     });
 
-    const message =
-      `🚨 <b>CÓ ĐƠN HÀNG MỚI!</b>\n\n` +
-      `👤 <b>Khách hàng ID:</b> ${userId}\n` +
-      `💰 <b>Tổng tiền:</b> $${savedOrder.totalPrice}\n` +
-      `📦 <b>Trạng thái:</b> ${savedOrder.status}\n` +
-      `⏰ <b>Thời gian:</b> ${new Date().toLocaleString()}`;
-
-    void this.telegramService.sendMessage(message).catch(() => {
-      this.logger.error('Không thể gửi thông báo đơn hàng qua Telegram');
-    });
-
+    const message = `New order for user ${userId}; total $${savedOrder.totalPrice}; status ${savedOrder.status}`;
+    void this.telegramService
+      .sendMessage(message)
+      .catch(() => this.logger.error('Unable to send order notification'));
     return savedOrder;
   }
 
-  private normalizeItems(
-    createOrderDto: CreateOrderDto,
-  ): NormalizedOrderItem[] {
-    const quantitiesByProductId = new Map<number, number>();
-
-    for (const item of createOrderDto.items) {
-      quantitiesByProductId.set(
-        item.productId,
-        (quantitiesByProductId.get(item.productId) ?? 0) + item.quantity,
+  private normalizeItems(dto: CreateOrderDto): NormalizedOrderItem[] {
+    const quantities = new Map<number, number>();
+    for (const item of dto.items)
+      quantities.set(
+        item.variantId,
+        (quantities.get(item.variantId) ?? 0) + item.quantity,
       );
-    }
-
-    return [...quantitiesByProductId.entries()]
-      .sort(([firstId], [secondId]) => firstId - secondId)
-      .map(([productId, quantity]) => ({ productId, quantity }));
+    return [...quantities.entries()]
+      .sort(([first], [second]) => first - second)
+      .map(([variantId, quantity]) => ({ variantId, quantity }));
   }
 }

@@ -22,6 +22,9 @@ import { ProductQueryDto } from './dto/product-query.dto';
 import { UpdateProductImageDto } from './dto/update-product-image.dto';
 import { UpdateProductDto } from './dto/update-product.dto';
 import { ProductImagesService } from './product-images.service';
+import { ProductVariantsService } from './product-variants.service';
+import { CreateProductVariantDto } from './dto/create-product-variant.dto';
+import { UpdateProductVariantDto } from './dto/update-product-variant.dto';
 import { ProductImageUploadInterceptor } from './product-image-upload';
 import { ProductsService } from './products.service';
 
@@ -30,7 +33,43 @@ export class ProductsController {
   constructor(
     private readonly productsService: ProductsService,
     private readonly productImagesService: ProductImagesService,
+    private readonly productVariantsService: ProductVariantsService,
   ) {}
+
+  @Post(':productId/variants')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  createVariant(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Body() dto: CreateProductVariantDto,
+  ) {
+    return this.productVariantsService.createForProduct(productId, dto);
+  }
+
+  @Patch(':productId/variants/:variantId')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  updateVariant(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Param('variantId', ParseIntPipe) variantId: number,
+    @Body() dto: UpdateProductVariantDto,
+  ) {
+    return this.productVariantsService.updateForProduct(
+      productId,
+      variantId,
+      dto,
+    );
+  }
+
+  @Delete(':productId/variants/:variantId')
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  removeVariant(
+    @Param('productId', ParseIntPipe) productId: number,
+    @Param('variantId', ParseIntPipe) variantId: number,
+  ) {
+    return this.productVariantsService.removeForProduct(productId, variantId);
+  }
 
   @Post(':productId/images')
   @UseGuards(AuthGuard, RolesGuard)

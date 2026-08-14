@@ -4,6 +4,7 @@ import { RolesGuard } from '../auth/roles.guard';
 import { ProductImagesService } from './product-images.service';
 import { ProductsController } from './products.controller';
 import { ProductsService } from './products.service';
+import { ProductVariantsService } from './product-variants.service';
 
 describe('ProductsController', () => {
   let controller: ProductsController;
@@ -15,6 +16,7 @@ describe('ProductsController', () => {
       providers: [
         { provide: ProductsService, useValue: {} },
         { provide: ProductImagesService, useValue: productImagesService },
+        { provide: ProductVariantsService, useValue: {} },
       ],
     })
       .overrideGuard(AuthGuard)

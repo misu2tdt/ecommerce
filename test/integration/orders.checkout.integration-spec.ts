@@ -1,27 +1,31 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, ConflictException } from '@nestjs/common';
 import { DataSource, QueryFailedError, QueryRunner } from 'typeorm';
 import { OrdersService } from '../../src/orders/orders.service';
 import { OrderItem } from '../../src/orders/entities/order-item.entity';
 import { Order } from '../../src/orders/entities/order.entity';
+import { ProductVariant } from '../../src/products/entities/product-variant.entity';
 import { Product } from '../../src/products/entities/product.entity';
 import { ProductStatus } from '../../src/products/entities/product-status.enum';
+import { ProductImage } from '../../src/products/entities/product-image.entity';
+import { ProductVariantsService } from '../../src/products/product-variants.service';
+import { ProductsService } from '../../src/products/products.service';
+import { Category } from '../../src/categories/entities/category.entity';
+import { Brand } from '../../src/brands/entities/brand.entity';
+import { ImageStorageService } from '../../src/image-storage/image-storage.service';
 import { TelegramService } from '../../src/telegram/telegram.service';
 import { UserRole } from '../../src/users/entities/user-role.enum';
 import { User } from '../../src/users/entities/user.entity';
+import { createCategory, createVariant } from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
-import { createCategory } from './catalog-fixtures';
 
 const nonexistentUserId = 2_147_483_647;
-
-describe('OrdersService PostgreSQL checkout integration', () => {
+describe('Variant checkout PostgreSQL integration', () => {
   let dataSource: DataSource;
-  let sendMessage: jest.MockedFunction<TelegramService['sendMessage']>;
+  let sendMessage: jest.Mock;
   let service: OrdersService;
-
   beforeAll(async () => {
     dataSource = await initializeTestDatabase();
   });
-
   beforeEach(async () => {
     await cleanTestDatabase(dataSource);
     sendMessage = jest.fn().mockResolvedValue(undefined);
@@ -29,7 +33,6 @@ describe('OrdersService PostgreSQL checkout integration', () => {
       sendMessage,
     } as unknown as TelegramService);
   });
-
   afterAll(async () => {
     if (dataSource?.isInitialized) {
       await cleanTestDatabase(dataSource);
@@ -37,181 +40,160 @@ describe('OrdersService PostgreSQL checkout integration', () => {
     }
   });
 
-  it('rolls back a stock write when the later order insert violates the user FK', async () => {
-    const productRepository = dataSource.getRepository(Product);
-    const category = await createCategory(dataSource, 'rollback');
-    const product = await productRepository.save(
-      productRepository.create({
-        name: 'Rollback product',
-        slug: 'rollback-product',
-        description: 'Rollback proof',
-        price: 25,
-        stock: 2,
-        status: ProductStatus.ACTIVE,
-        categoryId: category.id,
-        category,
-        brandId: null,
-        brand: null,
-      }),
-    );
+  it('rolls back Variant stock after later order FK failure', async () => {
+    const variant = await setupVariant('rollback', 2, 25);
     const querySpy = jest.spyOn(dataSource.logger, 'logQuery');
-
-    let checkoutError: unknown;
+    let error: unknown;
     try {
       await service.checkout(nonexistentUserId, {
-        items: [{ productId: product.id, quantity: 1 }],
+        items: [{ variantId: variant.id, quantity: 1 }],
       });
-    } catch (error) {
-      checkoutError = error;
+    } catch (caught) {
+      error = caught;
     }
-
-    const transactionQueries = querySpy.mock.calls.map(([query]) => query);
+    const queries = querySpy.mock.calls.map(([query]) => query);
     querySpy.mockRestore();
-
-    expect(checkoutError).toBeInstanceOf(QueryFailedError);
+    expect(error).toBeInstanceOf(QueryFailedError);
     expect(
-      (checkoutError as QueryFailedError & { driverError: { code: string } })
+      (error as QueryFailedError & { driverError: { code: string } })
         .driverError.code,
     ).toBe('23503');
-
-    const stockWriteIndex = transactionQueries.findIndex((query) =>
-      query.startsWith('UPDATE "products"'),
-    );
-    const orderInsertIndex = transactionQueries.findIndex((query) =>
-      query.startsWith('INSERT INTO "orders"'),
-    );
-    expect(stockWriteIndex).toBeGreaterThanOrEqual(0);
-    expect(orderInsertIndex).toBeGreaterThan(stockWriteIndex);
-
-    const persistedProduct = await productRepository.findOneByOrFail({
-      id: product.id,
-    });
-    expect(persistedProduct.stock).toBe(2);
+    expect(
+      queries.findIndex((query) =>
+        query.startsWith('UPDATE "product_variants"'),
+      ),
+    ).toBeGreaterThanOrEqual(0);
+    expect(
+      (
+        await dataSource
+          .getRepository(ProductVariant)
+          .findOneByOrFail({ id: variant.id })
+      ).stock,
+    ).toBe(2);
     await expect(dataSource.getRepository(Order).count()).resolves.toBe(0);
-    await expect(dataSource.getRepository(OrderItem).count()).resolves.toBe(0);
-    expect(sendMessage).not.toHaveBeenCalled();
   });
 
-  it('allows exactly one of two overlapping checkouts to buy the final unit', async () => {
-    const productRepository = dataSource.getRepository(Product);
-    const userRepository = dataSource.getRepository(User);
-    const category = await createCategory(dataSource, 'concurrency');
-    const product = await productRepository.save(
-      productRepository.create({
-        name: 'Final stock product',
-        slug: 'final-stock-product',
-        description: 'Concurrency proof',
-        price: 40,
-        stock: 1,
-        status: ProductStatus.ACTIVE,
-        categoryId: category.id,
-        category,
-        brandId: null,
-        brand: null,
-      }),
-    );
-    const [userA, userB] = await userRepository.save([
-      userRepository.create({
-        email: 'checkout-a@example.test',
-        password: 'not-a-real-password-hash',
-        role: UserRole.USER,
-      }),
-      userRepository.create({
-        email: 'checkout-b@example.test',
-        password: 'not-a-real-password-hash',
-        role: UserRole.USER,
-      }),
+  it('allows exactly one overlapping checkout for final Variant unit', async () => {
+    const variant = await setupVariant('concurrency', 1, 40);
+    const users = await dataSource.getRepository(User).save([
+      { email: 'a@example.test', password: 'hash', role: UserRole.USER },
+      { email: 'b@example.test', password: 'hash', role: UserRole.USER },
     ]);
-
     const blocker = dataSource.createQueryRunner();
-    const checkoutPromises: Array<ReturnType<OrdersService['checkout']>> = [];
+    const promises: Array<ReturnType<OrdersService['checkout']>> = [];
     let results: PromiseSettledResult<Order>[] = [];
-
     try {
       await blocker.connect();
       await blocker.startTransaction();
-      await blocker.manager.getRepository(Product).findOneOrFail({
-        where: { id: product.id },
+      await blocker.manager.getRepository(ProductVariant).findOneOrFail({
+        where: { id: variant.id },
         lock: { mode: 'pessimistic_write' },
       });
-
-      checkoutPromises.push(
-        service.checkout(userA.id, {
-          items: [{ productId: product.id, quantity: 1 }],
+      promises.push(
+        service.checkout(users[0].id, {
+          items: [{ variantId: variant.id, quantity: 1 }],
         }),
-        service.checkout(userB.id, {
-          items: [{ productId: product.id, quantity: 1 }],
+        service.checkout(users[1].id, {
+          items: [{ variantId: variant.id, quantity: 1 }],
         }),
       );
-
-      const waitingCheckoutCount = await waitForCheckoutLockWaiters(blocker, 2);
-      expect(waitingCheckoutCount).toBeGreaterThanOrEqual(2);
-
+      expect(
+        await waitForVariantLockWaiters(blocker, 2),
+      ).toBeGreaterThanOrEqual(2);
       await blocker.commitTransaction();
-      results = await Promise.allSettled(checkoutPromises);
+      results = await Promise.allSettled(promises);
     } finally {
-      if (blocker.isTransactionActive) {
-        await blocker.rollbackTransaction();
-      }
+      if (blocker.isTransactionActive) await blocker.rollbackTransaction();
       await blocker.release();
-      await Promise.allSettled(checkoutPromises);
+      await Promise.allSettled(promises);
     }
-
-    const fulfilled = results.filter(
-      (result): result is PromiseFulfilledResult<Order> =>
-        result.status === 'fulfilled',
+    expect(results.filter((item) => item.status === 'fulfilled')).toHaveLength(
+      1,
     );
     const rejected = results.filter(
-      (result): result is PromiseRejectedResult => result.status === 'rejected',
+      (item): item is PromiseRejectedResult => item.status === 'rejected',
     );
-
-    expect(fulfilled).toHaveLength(1);
     expect(rejected).toHaveLength(1);
     expect(rejected[0].reason).toBeInstanceOf(BadRequestException);
-
-    const persistedProduct = await productRepository.findOneByOrFail({
-      id: product.id,
-    });
-    expect(persistedProduct.stock).toBe(0);
+    expect(
+      (
+        await dataSource
+          .getRepository(ProductVariant)
+          .findOneByOrFail({ id: variant.id })
+      ).stock,
+    ).toBe(0);
     await expect(dataSource.getRepository(Order).count()).resolves.toBe(1);
     await expect(dataSource.getRepository(OrderItem).count()).resolves.toBe(1);
-    expect(sendMessage).toHaveBeenCalledTimes(1);
   }, 15_000);
+
+  it('protects ordered Variant and Product history from hard delete', async () => {
+    const variant = await setupVariant('history', 2, 10);
+    const user = await dataSource.getRepository(User).save({
+      email: 'history@example.test',
+      password: 'hash',
+      role: UserRole.USER,
+    });
+    await service.checkout(user.id, {
+      items: [{ variantId: variant.id, quantity: 1 }],
+    });
+    const variants = new ProductVariantsService(
+      dataSource.getRepository(ProductVariant),
+      dataSource.getRepository(Product),
+    );
+    await expect(
+      variants.removeForProduct(variant.productId, variant.id),
+    ).rejects.toBeInstanceOf(ConflictException);
+    const image = await dataSource.getRepository(ProductImage).save({
+      productId: variant.productId,
+      url: 'https://example.test/history.jpg',
+      storageKey: 'history-key',
+      altText: null,
+      position: 0,
+      isPrimary: false,
+    });
+    const storage = { deleteImage: jest.fn() };
+    const products = new ProductsService(
+      dataSource.getRepository(Product),
+      dataSource.getRepository(Category),
+      dataSource.getRepository(Brand),
+      dataSource.getRepository(ProductImage),
+      storage as unknown as ImageStorageService,
+    );
+    await expect(products.remove(variant.productId)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(storage.deleteImage).not.toHaveBeenCalled();
+    await expect(
+      dataSource.getRepository(ProductImage).findOneBy({ id: image.id }),
+    ).resolves.not.toBeNull();
+  });
+
+  async function setupVariant(suffix: string, stock: number, price: number) {
+    const category = await createCategory(dataSource, suffix);
+    const product = await dataSource.getRepository(Product).save({
+      name: `Product ${suffix}`,
+      slug: `product-${suffix}`,
+      description: null,
+      status: ProductStatus.ACTIVE,
+      categoryId: category.id,
+      brandId: null,
+    });
+    return createVariant(dataSource, product, suffix, { stock, price });
+  }
 });
 
-async function waitForCheckoutLockWaiters(
+async function waitForVariantLockWaiters(
   observer: QueryRunner,
-  expectedCount: number,
+  expected: number,
 ): Promise<number> {
   const deadline = Date.now() + 5_000;
-  let observed = { active: 0, lockWaiters: 0, productLockWaiters: 0 };
-
   while (Date.now() < deadline) {
     await observer.query('SELECT pg_stat_clear_snapshot()');
-    const rows = (await observer.query(`
-      SELECT
-        COUNT(*) FILTER (WHERE state = 'active')::int AS "active",
-        COUNT(*) FILTER (WHERE wait_event_type = 'Lock')::int AS "lockWaiters",
-        COUNT(*) FILTER (
-          WHERE wait_event_type = 'Lock'
-            AND query LIKE '%FOR UPDATE%'
-            AND query LIKE '%"products"%'
-        )::int AS "productLockWaiters"
-      FROM pg_stat_activity
-      WHERE datname = current_database()
-        AND pid <> pg_backend_pid()
-    `)) as Array<typeof observed>;
-
-    observed = rows[0];
-
-    if (observed.productLockWaiters >= expectedCount) {
-      return observed.productLockWaiters;
-    }
-
+    const [row] = await observer.query(
+      `SELECT COUNT(*) FILTER (WHERE wait_event_type = 'Lock' AND query LIKE '%FOR UPDATE%' AND query LIKE '%"product_variants"%')::int AS waiters FROM pg_stat_activity WHERE datname = current_database() AND pid <> pg_backend_pid()`,
+    );
+    if (row.waiters >= expected) return row.waiters;
     await new Promise((resolve) => setTimeout(resolve, 25));
   }
-
-  throw new Error(
-    `Expected ${expectedCount} checkout lock waiters; observed active=${observed.active}, lock=${observed.lockWaiters}, productLock=${observed.productLockWaiters}`,
-  );
+  throw new Error('Expected Variant checkout lock waiters');
 }

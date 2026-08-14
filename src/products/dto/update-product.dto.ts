@@ -2,7 +2,6 @@ import {
   IsEnum,
   IsInt,
   IsNotEmpty,
-  IsNumber,
   IsOptional,
   IsString,
   Min,
@@ -21,16 +20,6 @@ export class UpdateProductDto {
   @IsOptional()
   @IsString()
   description?: string;
-
-  @IsOptional()
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @Min(0.01)
-  price?: number;
-
-  @IsOptional()
-  @IsInt()
-  @Min(0)
-  stock?: number;
 
   @IsOptional()
   @IsInt()

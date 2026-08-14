@@ -48,8 +48,6 @@ describe('ProductsService', () => {
     await expect(
       service.create({
         name: 'Gaming Laptop',
-        price: 100,
-        stock: 2,
         categoryId: 10,
         brandId: 20,
       }),
@@ -66,7 +64,7 @@ describe('ProductsService', () => {
   it('rejects a missing Category', async () => {
     categoriesRepository.findOneBy.mockResolvedValue(null);
     await expect(
-      service.create({ name: 'Product', price: 10, stock: 1, categoryId: 999 }),
+      service.create({ name: 'Product', categoryId: 999 }),
     ).rejects.toBeInstanceOf(NotFoundException);
     expect(productsRepository.save).not.toHaveBeenCalled();
   });
@@ -76,8 +74,6 @@ describe('ProductsService', () => {
     await expect(
       service.create({
         name: 'Product',
-        price: 10,
-        stock: 1,
         categoryId: 10,
         brandId: 999,
       }),
@@ -89,8 +85,6 @@ describe('ProductsService', () => {
     await expect(
       service.create({
         name: 'Gaming Laptop',
-        price: 10,
-        stock: 1,
         categoryId: 10,
       }),
     ).rejects.toBeInstanceOf(ConflictException);
@@ -107,8 +101,6 @@ describe('ProductsService', () => {
     await expect(
       service.create({
         name: 'Gaming Laptop',
-        price: 10,
-        stock: 1,
         categoryId: 10,
       }),
     ).rejects.toBeInstanceOf(ConflictException);

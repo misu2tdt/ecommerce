@@ -1,7 +1,7 @@
 import { DataSource } from 'typeorm';
 import { Product } from '../../src/products/entities/product.entity';
 import { ProductStatus } from '../../src/products/entities/product-status.enum';
-import { createCategory } from './catalog-fixtures';
+import { createCategory, createVariant } from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
 describe('PostgreSQL integration harness', () => {
@@ -30,8 +30,6 @@ describe('PostgreSQL integration harness', () => {
         name: 'Integration smoke product',
         slug: 'integration-smoke-product',
         description: 'Created only in ecommerce_test',
-        price: 12.34,
-        stock: 3,
         status: ProductStatus.ACTIVE,
         categoryId: category.id,
         category,
@@ -39,11 +37,17 @@ describe('PostgreSQL integration harness', () => {
         brand: null,
       }),
     );
+    const savedVariant = await createVariant(
+      dataSource,
+      savedProduct,
+      'smoke',
+      { price: 12.34, stock: 3 },
+    );
 
     const product = await repository.findOneByOrFail({ id: savedProduct.id });
 
     expect(product.name).toBe('Integration smoke product');
-    expect(product.stock).toBe(3);
-    expect(Number(product.price)).toBe(12.34);
+    expect(savedVariant.stock).toBe(3);
+    expect(Number(savedVariant.price)).toBe(12.34);
   });
 });

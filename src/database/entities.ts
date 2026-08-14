@@ -4,6 +4,7 @@ import { OrderItem } from '../orders/entities/order-item.entity';
 import { Order } from '../orders/entities/order.entity';
 import { Product } from '../products/entities/product.entity';
 import { ProductImage } from '../products/entities/product-image.entity';
+import { ProductVariant } from '../products/entities/product-variant.entity';
 import { User } from '../users/entities/user.entity';
 
 export const databaseEntities = [
@@ -14,4 +15,5 @@ export const databaseEntities = [
   Category,
   Brand,
   ProductImage,
+  ProductVariant,
 ];

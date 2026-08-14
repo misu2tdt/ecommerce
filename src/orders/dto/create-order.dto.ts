@@ -10,7 +10,7 @@ import {
 export class OrderItemDto {
   @IsInt()
   @Min(1)
-  productId!: number;
+  variantId!: number;
 
   @IsInt()
   @Min(1)

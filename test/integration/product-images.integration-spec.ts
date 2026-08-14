@@ -89,8 +89,6 @@ describe('ProductImage PostgreSQL integration', () => {
     const brand = await createBrand(dataSource, 'delete-semantics');
     const product = await productsService.create({
       name: 'Delete semantics Product',
-      price: 25,
-      stock: 1,
       categoryId: category.id,
       brandId: brand.id,
     });
@@ -177,8 +175,6 @@ describe('ProductImage PostgreSQL integration', () => {
     const category = await createCategory(dataSource, 'gallery');
     const product = await productsService.create({
       name: 'Gallery Product',
-      price: 50,
-      stock: 3,
       categoryId: category.id,
     });
     const first = await imagesService.uploadForProduct(
@@ -215,8 +211,6 @@ describe('ProductImage PostgreSQL integration', () => {
     const category = await createCategory(dataSource, suffix);
     return productsService.create({
       name: `Image Product ${suffix}`,
-      price: 10,
-      stock: 2,
       categoryId: category.id,
     });
   }

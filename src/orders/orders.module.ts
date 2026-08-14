@@ -9,10 +9,7 @@ import { AuthModule } from '../auth/auth.module';
 
 @Module({
   // Thêm Product vào chung mảng với Order và OrderItem
-  imports: [
-    TypeOrmModule.forFeature([Order, OrderItem, Product]),
-    AuthModule,
-  ],
+  imports: [TypeOrmModule.forFeature([Order, OrderItem, Product]), AuthModule],
   controllers: [OrdersController],
   providers: [OrdersService],
 })
