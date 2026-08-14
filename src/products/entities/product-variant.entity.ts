@@ -11,6 +11,7 @@ import {
   UpdateDateColumn,
 } from 'typeorm';
 import { OrderItem } from '../../orders/entities/order-item.entity';
+import { CartItem } from '../../carts/entities/cart-item.entity';
 import { Product } from './product.entity';
 
 @Entity('product_variants')
@@ -58,6 +59,9 @@ export class ProductVariant {
 
   @OneToMany(() => OrderItem, (item) => item.variant)
   orderItems?: OrderItem[];
+
+  @OneToMany(() => CartItem, (item) => item.variant)
+  cartItems?: CartItem[];
 
   @CreateDateColumn()
   createdAt!: Date;

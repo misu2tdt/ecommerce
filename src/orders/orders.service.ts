@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
-import { DataSource } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
@@ -13,6 +13,11 @@ interface NormalizedOrderItem {
   quantity: number;
 }
 
+export interface PreparedCheckout {
+  dto: CreateOrderDto;
+  afterOrderSaved?: (manager: EntityManager) => Promise<void>;
+}
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
@@ -22,8 +27,18 @@ export class OrdersService {
   ) {}
 
   async checkout(userId: number, createOrderDto: CreateOrderDto) {
-    const normalizedItems = this.normalizeItems(createOrderDto);
+    return this.checkoutPrepared(userId, async () => ({
+      dto: createOrderDto,
+    }));
+  }
+
+  async checkoutPrepared(
+    userId: number,
+    prepare: (manager: EntityManager) => Promise<PreparedCheckout>,
+  ) {
     const savedOrder = await this.dataSource.transaction(async (manager) => {
+      const prepared = await prepare(manager);
+      const normalizedItems = this.normalizeItems(prepared.dto);
       const variantRepo = manager.getRepository(ProductVariant);
       const productRepo = manager.getRepository(Product);
       const orderRepo = manager.getRepository(Order);
@@ -77,7 +92,7 @@ export class OrdersService {
         );
       }
 
-      return orderRepo.save(
+      const order = await orderRepo.save(
         orderRepo.create({
           user: { id: userId },
           totalPrice,
@@ -85,6 +100,8 @@ export class OrdersService {
           items,
         }),
       );
+      await prepared.afterOrderSaved?.(manager);
+      return order;
     });
 
     const message = `New order for user ${userId}; total $${savedOrder.totalPrice}; status ${savedOrder.status}`;

@@ -6,6 +6,8 @@ import { Product } from '../products/entities/product.entity';
 import { ProductImage } from '../products/entities/product-image.entity';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { User } from '../users/entities/user.entity';
+import { Cart } from '../carts/entities/cart.entity';
+import { CartItem } from '../carts/entities/cart-item.entity';
 
 export const databaseEntities = [
   User,
@@ -16,4 +18,6 @@ export const databaseEntities = [
   Brand,
   ProductImage,
   ProductVariant,
+  Cart,
+  CartItem,
 ];

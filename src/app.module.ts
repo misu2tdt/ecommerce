@@ -12,6 +12,7 @@ import { OrdersModule } from './orders/orders.module';
 import { ProductsModule } from './products/products.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { UsersModule } from './users/users.module';
+import { CartsModule } from './carts/carts.module';
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { UsersModule } from './users/users.module';
     AuthModule,
     CategoriesModule,
     BrandsModule,
+    CartsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
