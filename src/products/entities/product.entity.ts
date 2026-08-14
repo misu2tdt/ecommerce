@@ -13,6 +13,8 @@ import { Category } from '../../categories/entities/category.entity';
 import { ProductImage } from './product-image.entity';
 import { ProductStatus } from './product-status.enum';
 import { ProductVariant } from './product-variant.entity';
+import { WishlistItem } from '../../wishlist/entities/wishlist-item.entity';
+import { ProductReview } from '../../reviews/entities/product-review.entity';
 
 @Entity('products')
 export class Product {
@@ -40,6 +42,10 @@ export class Product {
   images?: ProductImage[];
   @OneToMany(() => ProductVariant, (variant) => variant.product)
   variants?: ProductVariant[];
+  @OneToMany(() => WishlistItem, (item) => item.product)
+  wishlistItems?: WishlistItem[];
+  @OneToMany(() => ProductReview, (review) => review.product)
+  reviews?: ProductReview[];
   @CreateDateColumn()
   createdAt!: Date;
   @UpdateDateColumn()

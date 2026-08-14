@@ -28,6 +28,8 @@ export type PublicProduct = Omit<Product, 'images' | 'variants'> & {
   minPrice: string | null;
   maxPrice: string | null;
   inStock: boolean;
+  averageRating: number | null;
+  reviewCount: number;
   variants?: Array<
     Pick<
       ProductVariant,
@@ -107,6 +109,14 @@ export class ProductsService {
       .addSelect(
         'EXISTS(SELECT 1 FROM "product_variants" v WHERE v."productId" = product.id AND v."isActive" = true AND v."stock" > 0)',
         'inStock',
+      )
+      .addSelect(
+        '(SELECT ROUND(AVG(r."rating")::numeric, 2) FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'averageRating',
+      )
+      .addSelect(
+        '(SELECT COUNT(*)::int FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'reviewCount',
       );
 
     if (query.category) {
@@ -135,12 +145,17 @@ export class ProductsService {
         minPrice: raw[index].minPrice ?? null,
         maxPrice: raw[index].maxPrice ?? null,
         inStock: raw[index].inStock === true,
+        averageRating:
+          raw[index].averageRating === null
+            ? null
+            : Number(raw[index].averageRating),
+        reviewCount: Number(raw[index].reviewCount),
       }),
     );
   }
 
   async findBySlug(slug: string): Promise<PublicProduct> {
-    const product = await this.productsRepository
+    const { entities, raw } = await this.productsRepository
       .createQueryBuilder('product')
       .innerJoinAndSelect('product.category', 'category')
       .leftJoinAndSelect('product.brand', 'brand')
@@ -154,12 +169,21 @@ export class ProductsService {
       .andWhere('product.status = :status', {
         status: ProductStatus.ACTIVE,
       })
+      .addSelect(
+        '(SELECT ROUND(AVG(r."rating")::numeric, 2) FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'averageRating',
+      )
+      .addSelect(
+        '(SELECT COUNT(*)::int FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'reviewCount',
+      )
       .orderBy('image.isPrimary', 'DESC')
       .addOrderBy('image.position', 'ASC')
       .addOrderBy('image.id', 'ASC')
       .addOrderBy('variant.position', 'ASC')
       .addOrderBy('variant.id', 'ASC')
-      .getOne();
+      .getRawAndEntities();
+    const product = entities[0];
     if (!product) throw new NotFoundException('Product not found');
     const variants = product.variants ?? [];
     const prices = variants.map((variant) => Number(variant.price));
@@ -167,6 +191,9 @@ export class ProductsService {
       minPrice: prices.length ? Math.min(...prices).toFixed(2) : null,
       maxPrice: prices.length ? Math.max(...prices).toFixed(2) : null,
       inStock: variants.some((variant) => variant.stock > 0),
+      averageRating:
+        raw[0].averageRating === null ? null : Number(raw[0].averageRating),
+      reviewCount: Number(raw[0].reviewCount),
       variants: variants.map(
         ({ id, sku, name, price, stock, attributes, position }) => ({
           id,
@@ -247,7 +274,12 @@ export class ProductsService {
     product: Product,
     summary: Pick<
       PublicProduct,
-      'minPrice' | 'maxPrice' | 'inStock' | 'variants'
+      | 'minPrice'
+      | 'maxPrice'
+      | 'inStock'
+      | 'averageRating'
+      | 'reviewCount'
+      | 'variants'
     >,
   ): PublicProduct {
     const { images = [], variants: _variants, ...fields } = product;

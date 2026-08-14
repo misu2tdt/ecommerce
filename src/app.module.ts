@@ -12,6 +12,8 @@ import { OrdersModule } from './orders/orders.module';
 import { ProductsModule } from './products/products.module';
 import { TelegramModule } from './telegram/telegram.module';
 import { UsersModule } from './users/users.module';
+import { WishlistModule } from './wishlist/wishlist.module';
+import { ReviewsModule } from './reviews/reviews.module';
 import { AddressesModule } from './addresses/addresses.module';
 import { CartsModule } from './carts/carts.module';
 
@@ -37,6 +39,8 @@ import { CartsModule } from './carts/carts.module';
     BrandsModule,
     CartsModule,
     AddressesModule,
+    WishlistModule,
+    ReviewsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

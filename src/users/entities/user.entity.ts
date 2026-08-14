@@ -7,6 +7,8 @@ import {
   OneToOne,
 } from 'typeorm';
 import { Address } from '../../addresses/entities/address.entity';
+import { ProductReview } from '../../reviews/entities/product-review.entity';
+import { WishlistItem } from '../../wishlist/entities/wishlist-item.entity';
 import { UserRole } from './user-role.enum';
 import { Cart } from '../../carts/entities/cart.entity';
 
@@ -29,6 +31,12 @@ export class User {
 
   @OneToMany(() => Address, (address) => address.user)
   addresses?: Address[];
+
+  @OneToMany(() => WishlistItem, (item) => item.user)
+  wishlistItems?: WishlistItem[];
+
+  @OneToMany(() => ProductReview, (review) => review.user)
+  productReviews?: ProductReview[];
 
   @CreateDateColumn()
   createdAt!: Date;
