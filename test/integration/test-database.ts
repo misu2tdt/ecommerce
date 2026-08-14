@@ -40,6 +40,8 @@ export async function cleanTestDatabase(dataSource: DataSource): Promise<void> {
   assertSafeTestDatabase(dataSource);
 
   await dataSource.transaction(async (manager) => {
+    await manager.query('DELETE FROM "payment_events"');
+    await manager.query('DELETE FROM "payments"');
     await manager.query('DELETE FROM "product_reviews"');
     await manager.query('DELETE FROM "wishlist_items"');
     await manager.query('DELETE FROM "cart_items"');

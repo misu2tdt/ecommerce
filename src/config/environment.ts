@@ -43,3 +43,17 @@ export function getJwtExpiration(
     'JWT_EXPIRES_IN must be positive seconds or a duration such as 15m',
   );
 }
+
+export function getPaymentCurrency(
+  reader: ConfigReader,
+  fallback = 'USD',
+): string {
+  const configured = reader('PAYMENT_CURRENCY');
+  const currency =
+    typeof configured === 'string' && configured.trim().length > 0
+      ? configured.trim().toUpperCase()
+      : fallback;
+  if (!/^[A-Z]{3}$/.test(currency))
+    throw new Error('PAYMENT_CURRENCY must be a 3-letter currency code');
+  return currency;
+}

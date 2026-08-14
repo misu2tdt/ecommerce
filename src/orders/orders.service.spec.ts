@@ -1,6 +1,12 @@
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  ConflictException,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Address } from '../addresses/entities/address.entity';
+import { PaymentStatus } from '../payments/entities/payment-status.enum';
+import { Payment } from '../payments/entities/payment.entity';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
@@ -19,12 +25,14 @@ describe('OrdersService lifecycle', () => {
     save: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
+    findOneBy: jest.fn(),
   };
   const orderItemRepo = {
     create: jest.fn(),
     find: jest.fn(),
     save: jest.fn(),
   };
+  const paymentRepo = { find: jest.fn(), save: jest.fn() };
   const manager = {
     getRepository: jest.fn((entity) => repository(entity)),
   };
@@ -49,6 +57,9 @@ describe('OrdersService lifecycle', () => {
     orderRepo.create.mockImplementation((value) => value);
     orderRepo.save.mockImplementation(async (value) => ({ id: 1, ...value }));
     orderRepo.find.mockResolvedValue([]);
+    orderRepo.findOneBy.mockResolvedValue(order());
+    paymentRepo.find.mockResolvedValue([]);
+    paymentRepo.save.mockImplementation(async (value) => value);
     telegram.sendMessage.mockResolvedValue(undefined);
     service = new OrdersService(
       dataSource as unknown as DataSource,
@@ -186,12 +197,39 @@ describe('OrdersService lifecycle', () => {
     expect(variantRepo.save).toHaveBeenCalledTimes(1);
   });
 
+  it('rejects cancellation of a paid Order without restoring stock', async () => {
+    orderRepo.findOne.mockResolvedValue(order());
+    paymentRepo.find.mockResolvedValue([
+      { id: 9, status: PaymentStatus.SUCCEEDED },
+    ]);
+
+    await expect(service.cancelForUser(7, 3)).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+    expect(orderItemRepo.find).not.toHaveBeenCalled();
+    expect(variantRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('cancels unfinished Payment attempts with an unpaid Order', async () => {
+    const pending = { id: 9, status: PaymentStatus.PENDING };
+    const processing = { id: 10, status: PaymentStatus.PROCESSING };
+    orderRepo.findOne.mockResolvedValue(order());
+    paymentRepo.find.mockResolvedValue([pending, processing]);
+
+    await service.cancelForUser(7, 3);
+
+    expect(paymentRepo.save).toHaveBeenCalledWith([pending, processing]);
+    expect(pending.status).toBe(PaymentStatus.CANCELLED);
+    expect(processing.status).toBe(PaymentStatus.CANCELLED);
+  });
+
   function repository(entity: unknown) {
     if (entity === Address) return addressRepo;
     if (entity === ProductVariant) return variantRepo;
     if (entity === Product) return productRepo;
     if (entity === Order) return orderRepo;
     if (entity === OrderItem) return orderItemRepo;
+    if (entity === Payment) return paymentRepo;
   }
 });
 

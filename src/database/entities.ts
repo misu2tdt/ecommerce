@@ -11,6 +11,8 @@ import { CartItem } from '../carts/entities/cart-item.entity';
 import { Address } from '../addresses/entities/address.entity';
 import { WishlistItem } from '../wishlist/entities/wishlist-item.entity';
 import { ProductReview } from '../reviews/entities/product-review.entity';
+import { Payment } from '../payments/entities/payment.entity';
+import { PaymentEvent } from '../payments/entities/payment-event.entity';
 
 export const databaseEntities = [
   User,
@@ -26,4 +28,6 @@ export const databaseEntities = [
   Address,
   WishlistItem,
   ProductReview,
+  Payment,
+  PaymentEvent,
 ];

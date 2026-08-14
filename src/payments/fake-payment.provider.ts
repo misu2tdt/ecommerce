@@ -1,0 +1,33 @@
+import { Injectable } from '@nestjs/common';
+import { PaymentStatus } from './entities/payment-status.enum';
+import {
+  CreateProviderPaymentInput,
+  CreateProviderPaymentResult,
+  FAKE_PAYMENT_PROVIDER,
+  PaymentProvider,
+} from './payment-provider';
+
+@Injectable()
+export class FakePaymentProvider extends PaymentProvider {
+  readonly provider = FAKE_PAYMENT_PROVIDER;
+  creationCount = 0;
+  private failNext = false;
+
+  failNextCreation() {
+    this.failNext = true;
+  }
+
+  async createPayment(
+    input: CreateProviderPaymentInput,
+  ): Promise<CreateProviderPaymentResult> {
+    this.creationCount += 1;
+    if (this.failNext) {
+      this.failNext = false;
+      throw new Error('Fake provider creation failure');
+    }
+    return {
+      providerPaymentId: `fake_payment_${input.paymentId}`,
+      initialStatus: PaymentStatus.PROCESSING,
+    };
+  }
+}

@@ -1,11 +1,14 @@
 import {
   BadRequestException,
+  ConflictException,
   Injectable,
   Logger,
   NotFoundException,
 } from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
 import { Address } from '../addresses/entities/address.entity';
+import { PaymentStatus } from '../payments/entities/payment-status.enum';
+import { Payment } from '../payments/entities/payment.entity';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
@@ -192,12 +195,39 @@ export class OrdersService {
   private async cancel(id: number, userId?: number) {
     return this.dataSource.transaction(async (manager) => {
       const orderRepo = manager.getRepository(Order);
+      const ownedOrder = await orderRepo.findOneBy(
+        userId === undefined ? { id } : { id, userId },
+      );
+      if (!ownedOrder) throw new NotFoundException('Order not found');
+
+      const paymentRepo = manager.getRepository(Payment);
+      const payments = await paymentRepo.find({
+        where: { orderId: id },
+        order: { id: 'ASC' },
+        lock: { mode: 'pessimistic_write' },
+      });
       const order = await orderRepo.findOne({
         where: userId === undefined ? { id } : { id, userId },
         lock: { mode: 'pessimistic_write' },
       });
       if (!order) throw new NotFoundException('Order not found');
       this.assertTransition(order.status, OrderStatus.CANCELLED);
+      if (
+        payments.some((payment) => payment.status === PaymentStatus.SUCCEEDED)
+      )
+        throw new ConflictException(
+          'Paid Order cannot be cancelled before refund support',
+        );
+
+      const cancellablePayments = payments.filter((payment) =>
+        [PaymentStatus.PENDING, PaymentStatus.PROCESSING].includes(
+          payment.status,
+        ),
+      );
+      for (const payment of cancellablePayments)
+        payment.status = PaymentStatus.CANCELLED;
+      if (cancellablePayments.length > 0)
+        await paymentRepo.save(cancellablePayments);
 
       const items = await manager.getRepository(OrderItem).find({
         where: { orderId: order.id },

@@ -13,6 +13,7 @@ import { User } from '../../users/entities/user.entity';
 import type { ShippingAddressSnapshot } from '../shipping-address';
 import { OrderItem } from './order-item.entity';
 import { OrderStatus } from './order-status.enum';
+import { Payment } from '../../payments/entities/payment.entity';
 
 @Entity('orders')
 @Check(
@@ -41,6 +42,9 @@ export class Order {
 
   @OneToMany(() => OrderItem, (orderItem) => orderItem.order, { cascade: true })
   items!: OrderItem[];
+
+  @OneToMany(() => Payment, (payment) => payment.order)
+  payments?: Payment[];
 
   @CreateDateColumn()
   createdAt!: Date;
