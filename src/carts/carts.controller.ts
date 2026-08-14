@@ -15,6 +15,7 @@ import { CurrentUser } from '../auth/current-user.decorator';
 import { CartsService } from './carts.service';
 import { AddCartItemDto } from './dto/add-cart-item.dto';
 import { UpdateCartItemDto } from './dto/update-cart-item.dto';
+import { CheckoutCartDto } from './dto/checkout-cart.dto';
 
 @Controller('cart')
 @UseGuards(AuthGuard)
@@ -54,7 +55,10 @@ export class CartsController {
   }
 
   @Post('checkout')
-  checkout(@CurrentUser() user: AuthenticatedUser) {
-    return this.cartsService.checkout(user.id);
+  checkout(
+    @CurrentUser() user: AuthenticatedUser,
+    @Body() dto: CheckoutCartDto,
+  ) {
+    return this.cartsService.checkout(user.id, dto.addressId);
   }
 }

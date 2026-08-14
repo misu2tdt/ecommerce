@@ -1,9 +1,9 @@
 import {
-  Entity,
-  PrimaryGeneratedColumn,
   Column,
+  Entity,
   JoinColumn,
   ManyToOne,
+  PrimaryGeneratedColumn,
 } from 'typeorm';
 import { ProductVariant } from '../../products/entities/product-variant.entity';
 import { Order } from './order.entity';
@@ -16,18 +16,19 @@ export class OrderItem {
   @Column({ type: 'int' })
   quantity!: number;
 
-  // LƯU Ý KINH NGHIỆM: Phải lưu giá tiền tại THỜI ĐIỂM MUA.
-  // Tránh trường hợp tháng sau tăng giá thì hóa đơn cũ của khách bị đổi giá theo.
   @Column({ type: 'decimal', precision: 10, scale: 2 })
   price!: number;
 
-  // MỐI QUAN HỆ: Nhiều Chi tiết đơn hàng cùng trỏ về 1 Đơn hàng
+  @Column({ type: 'int' })
+  orderId!: number;
+
   @ManyToOne(() => Order, (order) => order.items)
+  @JoinColumn({ name: 'orderId' })
   order!: Order;
 
-  // MỐI QUAN HỆ: Nhiều Chi tiết đơn hàng có thể chứa cùng 1 Sản phẩm
   @Column({ type: 'int' })
   variantId!: number;
+
   @ManyToOne(() => ProductVariant, (variant) => variant.orderItems, {
     nullable: false,
     onDelete: 'NO ACTION',

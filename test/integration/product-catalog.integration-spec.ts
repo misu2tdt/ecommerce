@@ -15,7 +15,11 @@ import { ProductsService } from '../../src/products/products.service';
 import { TelegramService } from '../../src/telegram/telegram.service';
 import { UserRole } from '../../src/users/entities/user-role.enum';
 import { User } from '../../src/users/entities/user.entity';
-import { createCategory, createVariant } from './catalog-fixtures';
+import {
+  createAddress,
+  createCategory,
+  createVariant,
+} from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
 describe('Product variant catalog PostgreSQL integration', () => {
@@ -131,11 +135,13 @@ describe('Product variant catalog PostgreSQL integration', () => {
       password: 'hash',
       role: UserRole.USER,
     });
+    const address = await createAddress(dataSource, user, 'inactive');
     const service = new OrdersService(dataSource, {
       sendMessage: jest.fn(),
     } as unknown as TelegramService);
     await expect(
       service.checkout(user.id, {
+        addressId: address.id,
         items: [{ variantId: variant.id, quantity: 1 }],
       }),
     ).rejects.toBeInstanceOf(BadRequestException);

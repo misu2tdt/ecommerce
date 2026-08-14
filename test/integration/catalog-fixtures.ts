@@ -3,6 +3,8 @@ import { Brand } from '../../src/brands/entities/brand.entity';
 import { Category } from '../../src/categories/entities/category.entity';
 import { ProductVariant } from '../../src/products/entities/product-variant.entity';
 import { Product } from '../../src/products/entities/product.entity';
+import { Address } from '../../src/addresses/entities/address.entity';
+import { User } from '../../src/users/entities/user.entity';
 
 export async function createCategory(
   dataSource: DataSource,
@@ -47,5 +49,32 @@ export async function createBrand(
   const repository = dataSource.getRepository(Brand);
   return repository.save(
     repository.create({ name: `Brand ${suffix}`, slug: `brand-${suffix}` }),
+  );
+}
+
+export async function createAddress(
+  dataSource: DataSource,
+  user: User,
+  suffix: string,
+  overrides: Partial<Address> = {},
+): Promise<Address> {
+  const repository = dataSource.getRepository(Address);
+  return repository.save(
+    repository.create({
+      userId: user.id,
+      label: null,
+      recipientName: `Recipient ${suffix}`,
+      phone: '+12025550123',
+      addressLine1: `Address ${suffix}`,
+      addressLine2: null,
+      ward: null,
+      district: null,
+      city: 'Test City',
+      stateProvince: null,
+      postalCode: null,
+      countryCode: 'US',
+      isDefault: false,
+      ...overrides,
+    }),
   );
 }

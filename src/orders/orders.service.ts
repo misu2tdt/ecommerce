@@ -1,12 +1,20 @@
-import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { DataSource, EntityManager } from 'typeorm';
+import { Address } from '../addresses/entities/address.entity';
 import { ProductStatus } from '../products/entities/product-status.enum';
 import { ProductVariant } from '../products/entities/product-variant.entity';
 import { Product } from '../products/entities/product.entity';
 import { TelegramService } from '../telegram/telegram.service';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrderItem } from './entities/order-item.entity';
+import { OrderStatus } from './entities/order-status.enum';
 import { Order } from './entities/order.entity';
+import { snapshotShippingAddress } from './shipping-address';
 
 interface NormalizedOrderItem {
   variantId: number;
@@ -18,9 +26,19 @@ export interface PreparedCheckout {
   afterOrderSaved?: (manager: EntityManager) => Promise<void>;
 }
 
+const allowedTransitions: Record<OrderStatus, readonly OrderStatus[]> = {
+  [OrderStatus.PENDING]: [OrderStatus.CONFIRMED, OrderStatus.CANCELLED],
+  [OrderStatus.CONFIRMED]: [OrderStatus.PROCESSING, OrderStatus.CANCELLED],
+  [OrderStatus.PROCESSING]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+  [OrderStatus.SHIPPED]: [OrderStatus.DELIVERED],
+  [OrderStatus.DELIVERED]: [],
+  [OrderStatus.CANCELLED]: [],
+};
+
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
+
   constructor(
     private readonly dataSource: DataSource,
     private readonly telegramService: TelegramService,
@@ -38,6 +56,12 @@ export class OrdersService {
   ) {
     const savedOrder = await this.dataSource.transaction(async (manager) => {
       const prepared = await prepare(manager);
+      const address = await manager.getRepository(Address).findOneBy({
+        id: prepared.dto.addressId,
+        userId,
+      });
+      if (!address) throw new NotFoundException('Address not found');
+
       const normalizedItems = this.normalizeItems(prepared.dto);
       const variantRepo = manager.getRepository(ProductVariant);
       const productRepo = manager.getRepository(Product);
@@ -94,12 +118,18 @@ export class OrdersService {
 
       const order = await orderRepo.save(
         orderRepo.create({
-          user: { id: userId },
+          userId,
           totalPrice,
-          status: 'pending',
-          items,
+          status: OrderStatus.PENDING,
+          shippingAddress: snapshotShippingAddress(address),
+          items: [],
         }),
       );
+      for (const item of items) {
+        item.orderId = order.id;
+        item.order = order;
+      }
+      order.items = await orderItemRepo.save(items);
       await prepared.afterOrderSaved?.(manager);
       return order;
     });
@@ -109,6 +139,140 @@ export class OrdersService {
       .sendMessage(message)
       .catch(() => this.logger.error('Unable to send order notification'));
     return savedOrder;
+  }
+
+  async findAllForUser(userId: number) {
+    const orders = await this.dataSource.getRepository(Order).find({
+      where: { userId },
+      relations: { items: { variant: { product: true } } },
+      order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
+    });
+    return orders.map((order) => this.toOrderView(order));
+  }
+
+  async findOneForUser(userId: number, id: number) {
+    const order = await this.loadOrder({ id, userId });
+    if (!order) throw new NotFoundException('Order not found');
+    return this.toOrderView(order);
+  }
+
+  async findAllForAdmin() {
+    const orders = await this.dataSource.getRepository(Order).find({
+      relations: { items: { variant: { product: true } } },
+      order: { createdAt: 'DESC', id: 'DESC', items: { id: 'ASC' } },
+    });
+    return orders.map((order) => this.toOrderView(order));
+  }
+
+  async findOneForAdmin(id: number) {
+    const order = await this.loadOrder({ id });
+    if (!order) throw new NotFoundException('Order not found');
+    return this.toOrderView(order);
+  }
+
+  cancelForUser(userId: number, id: number) {
+    return this.cancel(id, userId);
+  }
+
+  async updateStatus(id: number, target: OrderStatus) {
+    if (target === OrderStatus.CANCELLED) return this.cancel(id);
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Order);
+      const order = await repository.findOne({
+        where: { id },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      this.assertTransition(order.status, target);
+      order.status = target;
+      return repository.save(order);
+    });
+  }
+
+  private async cancel(id: number, userId?: number) {
+    return this.dataSource.transaction(async (manager) => {
+      const orderRepo = manager.getRepository(Order);
+      const order = await orderRepo.findOne({
+        where: userId === undefined ? { id } : { id, userId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (!order) throw new NotFoundException('Order not found');
+      this.assertTransition(order.status, OrderStatus.CANCELLED);
+
+      const items = await manager.getRepository(OrderItem).find({
+        where: { orderId: order.id },
+        order: { variantId: 'ASC', id: 'ASC' },
+      });
+      const quantities = new Map<number, number>();
+      for (const item of items)
+        quantities.set(
+          item.variantId,
+          (quantities.get(item.variantId) ?? 0) + item.quantity,
+        );
+
+      const variantRepo = manager.getRepository(ProductVariant);
+      for (const [variantId, quantity] of [...quantities.entries()].sort(
+        ([first], [second]) => first - second,
+      )) {
+        const variant = await variantRepo.findOne({
+          where: { id: variantId },
+          lock: { mode: 'pessimistic_write' },
+        });
+        if (!variant)
+          throw new BadRequestException(
+            `Variant ID ${variantId} does not exist`,
+          );
+        variant.stock += quantity;
+        await variantRepo.save(variant);
+      }
+
+      order.status = OrderStatus.CANCELLED;
+      return orderRepo.save(order);
+    });
+  }
+
+  private assertTransition(current: OrderStatus, target: OrderStatus) {
+    if (!allowedTransitions[current].includes(target))
+      throw new BadRequestException(
+        `Cannot transition Order from ${current} to ${target}`,
+      );
+  }
+
+  private loadOrder(where: { id: number; userId?: number }) {
+    return this.dataSource.getRepository(Order).findOne({
+      where,
+      relations: { items: { variant: { product: true } } },
+      order: { items: { id: 'ASC' } },
+    });
+  }
+
+  private toOrderView(order: Order) {
+    return {
+      id: order.id,
+      userId: order.userId,
+      status: order.status,
+      totalPrice: Number(order.totalPrice),
+      shippingAddress: order.shippingAddress,
+      createdAt: order.createdAt,
+      updatedAt: order.updatedAt,
+      items: order.items.map((item) => ({
+        id: item.id,
+        quantity: item.quantity,
+        price: Number(item.price),
+        lineTotal: Number(item.price) * item.quantity,
+        variant: {
+          id: item.variant.id,
+          sku: item.variant.sku,
+          name: item.variant.name,
+          attributes: item.variant.attributes,
+          product: {
+            id: item.variant.product.id,
+            name: item.variant.product.name,
+            slug: item.variant.product.slug,
+          },
+        },
+      })),
+    };
   }
 
   private normalizeItems(dto: CreateOrderDto): NormalizedOrderItem[] {

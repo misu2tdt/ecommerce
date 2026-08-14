@@ -18,6 +18,10 @@ export class OrderItemDto {
 }
 
 export class CreateOrderDto {
+  @IsInt()
+  @Min(1)
+  addressId!: number;
+
   @IsArray()
   @ArrayMinSize(1)
   @ValidateNested({ each: true })

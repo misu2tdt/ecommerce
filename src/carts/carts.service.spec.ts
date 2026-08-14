@@ -154,7 +154,7 @@ describe('CartsService', () => {
         prepare: (manager: EntityManager) => Promise<PreparedCheckout>,
       ) => prepare(manager as unknown as EntityManager),
     );
-    await expect(service.checkout(7)).rejects.toBeInstanceOf(
+    await expect(service.checkout(7, 12)).rejects.toBeInstanceOf(
       BadRequestException,
     );
   });
@@ -170,13 +170,14 @@ describe('CartsService', () => {
       ) => {
         const prepared = await prepare(manager as unknown as EntityManager);
         expect(prepared.dto).toEqual({
+          addressId: 12,
           items: [{ variantId: 6, quantity: 2 }],
         });
         await prepared.afterOrderSaved?.(manager as unknown as EntityManager);
         return { id: 20 };
       },
     );
-    await expect(service.checkout(7)).resolves.toEqual({ id: 20 });
+    await expect(service.checkout(7, 12)).resolves.toEqual({ id: 20 });
     expect(orders.checkoutPrepared).toHaveBeenCalledWith(
       7,
       expect.any(Function),
@@ -197,7 +198,7 @@ describe('CartsService', () => {
         throw new BadRequestException('Insufficient stock');
       },
     );
-    await expect(service.checkout(7)).rejects.toBeInstanceOf(
+    await expect(service.checkout(7, 12)).rejects.toBeInstanceOf(
       BadRequestException,
     );
     expect(itemRepo.delete).not.toHaveBeenCalled();

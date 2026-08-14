@@ -25,7 +25,7 @@ describe('OrdersController', () => {
 
   it('delegates checkout using only the authenticated user id', async () => {
     ordersService.checkout.mockResolvedValue({ id: 10 });
-    const dto = { items: [{ variantId: 3, quantity: 2 }] };
+    const dto = { addressId: 5, items: [{ variantId: 3, quantity: 2 }] };
     await expect(
       controller.checkout(
         { id: 7, email: 'user@example.test', role: 'user' } as never,

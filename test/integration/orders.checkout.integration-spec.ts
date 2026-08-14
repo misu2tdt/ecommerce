@@ -1,5 +1,5 @@
 import { BadRequestException, ConflictException } from '@nestjs/common';
-import { DataSource, QueryFailedError, QueryRunner } from 'typeorm';
+import { DataSource, QueryRunner } from 'typeorm';
 import { OrdersService } from '../../src/orders/orders.service';
 import { OrderItem } from '../../src/orders/entities/order-item.entity';
 import { Order } from '../../src/orders/entities/order.entity';
@@ -15,10 +15,13 @@ import { ImageStorageService } from '../../src/image-storage/image-storage.servi
 import { TelegramService } from '../../src/telegram/telegram.service';
 import { UserRole } from '../../src/users/entities/user-role.enum';
 import { User } from '../../src/users/entities/user.entity';
-import { createCategory, createVariant } from './catalog-fixtures';
+import {
+  createAddress,
+  createCategory,
+  createVariant,
+} from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
-const nonexistentUserId = 2_147_483_647;
 describe('Variant checkout PostgreSQL integration', () => {
   let dataSource: DataSource;
   let sendMessage: jest.Mock;
@@ -40,24 +43,32 @@ describe('Variant checkout PostgreSQL integration', () => {
     }
   });
 
-  it('rolls back Variant stock after later order FK failure', async () => {
+  it('rolls back Variant stock and Order after a later atomic checkout failure', async () => {
     const variant = await setupVariant('rollback', 2, 25);
+    const user = await dataSource.getRepository(User).save({
+      email: 'rollback@example.test',
+      password: 'hash',
+      role: UserRole.USER,
+    });
+    const address = await createAddress(dataSource, user, 'rollback');
     const querySpy = jest.spyOn(dataSource.logger, 'logQuery');
     let error: unknown;
     try {
-      await service.checkout(nonexistentUserId, {
-        items: [{ variantId: variant.id, quantity: 1 }],
-      });
+      await service.checkoutPrepared(user.id, async () => ({
+        dto: {
+          addressId: address.id,
+          items: [{ variantId: variant.id, quantity: 1 }],
+        },
+        afterOrderSaved: async () => {
+          throw new Error('Simulated atomic checkout failure');
+        },
+      }));
     } catch (caught) {
       error = caught;
     }
     const queries = querySpy.mock.calls.map(([query]) => query);
     querySpy.mockRestore();
-    expect(error).toBeInstanceOf(QueryFailedError);
-    expect(
-      (error as QueryFailedError & { driverError: { code: string } })
-        .driverError.code,
-    ).toBe('23503');
+    expect(error).toEqual(new Error('Simulated atomic checkout failure'));
     expect(
       queries.findIndex((query) =>
         query.startsWith('UPDATE "product_variants"'),
@@ -79,6 +90,10 @@ describe('Variant checkout PostgreSQL integration', () => {
       { email: 'a@example.test', password: 'hash', role: UserRole.USER },
       { email: 'b@example.test', password: 'hash', role: UserRole.USER },
     ]);
+    const addresses = await Promise.all([
+      createAddress(dataSource, users[0], 'concurrency-a'),
+      createAddress(dataSource, users[1], 'concurrency-b'),
+    ]);
     const blocker = dataSource.createQueryRunner();
     const promises: Array<ReturnType<OrdersService['checkout']>> = [];
     let results: PromiseSettledResult<Order>[] = [];
@@ -91,9 +106,11 @@ describe('Variant checkout PostgreSQL integration', () => {
       });
       promises.push(
         service.checkout(users[0].id, {
+          addressId: addresses[0].id,
           items: [{ variantId: variant.id, quantity: 1 }],
         }),
         service.checkout(users[1].id, {
+          addressId: addresses[1].id,
           items: [{ variantId: variant.id, quantity: 1 }],
         }),
       );
@@ -133,7 +150,9 @@ describe('Variant checkout PostgreSQL integration', () => {
       password: 'hash',
       role: UserRole.USER,
     });
+    const address = await createAddress(dataSource, user, 'history');
     await service.checkout(user.id, {
+      addressId: address.id,
       items: [{ variantId: variant.id, quantity: 1 }],
     });
     const variants = new ProductVariantsService(

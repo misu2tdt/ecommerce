@@ -12,7 +12,11 @@ import { Product } from '../../src/products/entities/product.entity';
 import { TelegramService } from '../../src/telegram/telegram.service';
 import { UserRole } from '../../src/users/entities/user-role.enum';
 import { User } from '../../src/users/entities/user.entity';
-import { createCategory, createVariant } from './catalog-fixtures';
+import {
+  createAddress,
+  createCategory,
+  createVariant,
+} from './catalog-fixtures';
 import { cleanTestDatabase, initializeTestDatabase } from './test-database';
 
 describe('Shopping cart PostgreSQL integration', () => {
@@ -100,10 +104,11 @@ describe('Shopping cart PostgreSQL integration', () => {
 
   it('checks out through the existing Variant lock path and atomically empties Cart', async () => {
     const user = await createUser('checkout-success');
+    const address = await createAddress(dataSource, user, 'checkout-success');
     const variant = await setupVariant('checkout-success', 5, 15);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 2 });
     const querySpy = jest.spyOn(dataSource.logger, 'logQuery');
-    const order = await carts.checkout(user.id);
+    const order = await carts.checkout(user.id, address.id);
     const queries = querySpy.mock.calls.map(([query]) => query);
     querySpy.mockRestore();
     expect(
@@ -127,9 +132,10 @@ describe('Shopping cart PostgreSQL integration', () => {
 
   it('rolls back stock and Order while preserving Cart on insufficient stock', async () => {
     const user = await createUser('checkout-failure');
+    const address = await createAddress(dataSource, user, 'checkout-failure');
     const variant = await setupVariant('checkout-failure', 1, 15);
     await carts.addItem(user.id, { variantId: variant.id, quantity: 2 });
-    await expect(carts.checkout(user.id)).rejects.toBeInstanceOf(
+    await expect(carts.checkout(user.id, address.id)).rejects.toBeInstanceOf(
       BadRequestException,
     );
     await expect(dataSource.getRepository(Order).count()).resolves.toBe(0);

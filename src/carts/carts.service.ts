@@ -86,7 +86,7 @@ export class CartsService {
     return this.loadCartView(cartId, userId);
   }
 
-  async checkout(userId: number) {
+  async checkout(userId: number, addressId: number) {
     return this.ordersService.checkoutPrepared(userId, async (manager) => {
       const cart = await this.getOrCreateLockedCart(manager, userId);
       const items = await manager.getRepository(CartItem).find({
@@ -98,6 +98,7 @@ export class CartsService {
       const purchasedItemIds = items.map((item) => item.id);
       return {
         dto: {
+          addressId,
           items: items.map((item) => ({
             variantId: item.variantId,
             quantity: item.quantity,
