@@ -13,6 +13,10 @@ export class FakePaymentProvider extends PaymentProvider {
   creationCount = 0;
   private failNext = false;
 
+  getProviderPaymentId(paymentId: number): string {
+    return `fake_payment_${paymentId}`;
+  }
+
   failNextCreation() {
     this.failNext = true;
   }
@@ -26,7 +30,7 @@ export class FakePaymentProvider extends PaymentProvider {
       throw new Error('Fake provider creation failure');
     }
     return {
-      providerPaymentId: `fake_payment_${input.paymentId}`,
+      providerPaymentId: this.getProviderPaymentId(input.paymentId),
       initialStatus: PaymentStatus.PROCESSING,
     };
   }

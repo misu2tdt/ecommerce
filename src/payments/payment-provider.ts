@@ -19,6 +19,7 @@ export interface CreateProviderPaymentResult {
 
 export abstract class PaymentProvider {
   abstract readonly provider: string;
+  abstract getProviderPaymentId(paymentId: number): string;
   abstract createPayment(
     input: CreateProviderPaymentInput,
   ): Promise<CreateProviderPaymentResult>;

@@ -14,17 +14,44 @@ import {
 } from './payments.constants';
 import { PaymentsController } from './payments.controller';
 import { PaymentsService } from './payments.service';
+import { getMomoConfig, MomoConfig } from './momo/momo.config';
+import { MOMO_CONFIG, MOMO_HTTP_CLIENT } from './momo/momo.constants';
+import { FetchMomoHttpClient, MomoHttpClient } from './momo/momo-http.client';
+import { MomoIpnService } from './momo/momo-ipn.service';
+import { MomoPaymentProvider } from './momo/momo-payment.provider';
+import { MomoWebhookController } from './momo/momo-webhook.controller';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([Payment, PaymentEvent, Order]),
     AuthModule,
   ],
-  controllers: [PaymentsController],
+  controllers: [PaymentsController, MomoWebhookController],
   providers: [
     PaymentsService,
     FakePaymentProvider,
-    { provide: PaymentProvider, useExisting: FakePaymentProvider },
+    {
+      provide: MOMO_CONFIG,
+      inject: [ConfigService],
+      useFactory: (configService: ConfigService): MomoConfig =>
+        process.env.NODE_ENV === 'test'
+          ? testMomoConfig()
+          : getMomoConfig((key) => configService.get(key)),
+    },
+    { provide: MOMO_HTTP_CLIENT, useClass: FetchMomoHttpClient },
+    {
+      provide: PaymentProvider,
+      inject: [MOMO_CONFIG, MOMO_HTTP_CLIENT, FakePaymentProvider],
+      useFactory: (
+        config: MomoConfig,
+        httpClient: MomoHttpClient,
+        fakeProvider: FakePaymentProvider,
+      ) =>
+        process.env.NODE_ENV === 'test'
+          ? fakeProvider
+          : new MomoPaymentProvider(config, httpClient),
+    },
+    MomoIpnService,
     {
       provide: PAYMENT_CURRENCY,
       inject: [ConfigService],
@@ -38,3 +65,16 @@ import { PaymentsService } from './payments.service';
   exports: [PaymentsService],
 })
 export class PaymentsModule {}
+
+function testMomoConfig(): MomoConfig {
+  return {
+    partnerCode: 'test-partner',
+    accessKey: 'test-access',
+    secretKey: 'test-secret',
+    identitySecret: 'test-identity-secret',
+    endpoint: 'https://test-payment.momo.vn',
+    redirectUrl: 'https://example.test/payment-return',
+    ipnUrl: 'https://example.test/payments/webhooks/momo',
+    timeoutMs: 30_000,
+  };
+}

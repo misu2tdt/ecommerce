@@ -18,6 +18,7 @@ import { PaymentStatus } from './entities/payment-status.enum';
 import { Payment } from './entities/payment.entity';
 import { ProviderPaymentEvent } from './payment-event';
 import { PaymentProvider } from './payment-provider';
+import { PaymentProviderAmbiguousError } from './provider-errors';
 import { PAYMENT_CURRENCY } from './payments.constants';
 
 @Injectable()
@@ -34,11 +35,11 @@ export class PaymentsService {
     rawIdempotencyKey: string | undefined,
   ) {
     const idempotencyKey = this.normalizeIdempotencyKey(rawIdempotencyKey);
-    const payment = await this.establishAttempt(
-      userId,
-      orderId,
-      idempotencyKey,
-    );
+    let payment = await this.establishAttempt(userId, orderId, idempotencyKey);
+    payment = await this.ensureProviderIdentity(payment.id);
+    let continuation:
+      | { checkoutUrl?: string; clientData?: Record<string, string> }
+      | undefined;
     const claimed = await this.claimProviderCreation(payment.id);
     if (claimed) {
       try {
@@ -53,8 +54,14 @@ export class PaymentsService {
           payment.id,
           providerResult.providerPaymentId,
         );
-      } catch {
-        await this.markProviderCreationFailed(payment.id);
+        continuation = {
+          checkoutUrl: providerResult.checkoutUrl,
+          clientData: providerResult.clientData,
+        };
+      } catch (error) {
+        if (error instanceof PaymentProviderAmbiguousError)
+          await this.markProviderCreationUncertain(payment.id);
+        else await this.markProviderCreationFailed(payment.id);
         throw new BadGatewayException('Payment provider creation failed');
       }
     }
@@ -62,6 +69,7 @@ export class PaymentsService {
       await this.dataSource.getRepository(Payment).findOneByOrFail({
         id: payment.id,
       }),
+      continuation,
     );
   }
 
@@ -230,6 +238,24 @@ export class PaymentsService {
     });
   }
 
+  private async ensureProviderIdentity(paymentId: number) {
+    return this.dataSource.transaction(async (manager) => {
+      const repository = manager.getRepository(Payment);
+      const payment = await repository.findOneOrFail({
+        where: { id: paymentId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      const expected = this.paymentProvider.getProviderPaymentId(payment.id);
+      if (payment.providerPaymentId === null) {
+        payment.providerPaymentId = expected;
+        return repository.save(payment);
+      }
+      if (payment.providerPaymentId !== expected)
+        throw new ConflictException('Payment provider identity mismatch');
+      return payment;
+    });
+  }
+
   private async persistProviderCreation(
     paymentId: number,
     providerPaymentId: string,
@@ -240,7 +266,22 @@ export class PaymentsService {
         lock: { mode: 'pessimistic_write' },
       });
       if (payment.status !== PaymentStatus.PROCESSING) return;
-      payment.providerPaymentId = providerPaymentId;
+      if (payment.providerPaymentId !== providerPaymentId)
+        throw new ConflictException('Payment provider identity mismatch');
+      await manager.getRepository(Payment).save(payment);
+    });
+  }
+
+  private async markProviderCreationUncertain(paymentId: number) {
+    await this.dataSource.transaction(async (manager) => {
+      const payment = await manager.getRepository(Payment).findOneOrFail({
+        where: { id: paymentId },
+        lock: { mode: 'pessimistic_write' },
+      });
+      if (payment.status !== PaymentStatus.PROCESSING) return;
+      payment.failureCode = 'PROVIDER_OUTCOME_UNKNOWN';
+      payment.failureMessage =
+        'Provider payment outcome requires reconciliation';
       await manager.getRepository(Payment).save(payment);
     });
   }
@@ -335,7 +376,13 @@ export class PaymentsService {
     );
   }
 
-  private toPaymentView(payment: Payment) {
+  private toPaymentView(
+    payment: Payment,
+    continuation?: {
+      checkoutUrl?: string;
+      clientData?: Record<string, string>;
+    },
+  ) {
     return {
       id: payment.id,
       provider: payment.provider,
@@ -345,6 +392,12 @@ export class PaymentsService {
       createdAt: payment.createdAt,
       updatedAt: payment.updatedAt,
       succeededAt: payment.succeededAt,
+      ...(continuation?.checkoutUrl
+        ? { checkoutUrl: continuation.checkoutUrl }
+        : {}),
+      ...(continuation?.clientData
+        ? { clientData: continuation.clientData }
+        : {}),
     };
   }
 }
