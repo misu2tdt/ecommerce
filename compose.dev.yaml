@@ -1,0 +1,24 @@
+name: ecommerce-local
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: ${DEV_DB_CONTAINER_NAME:-ecom_db}
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - '${DEV_DB_HOST_PORT:-5434}:5432'
+    volumes:
+      - ecommerce_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U "$${POSTGRES_USER}" -d postgres']
+      interval: 2s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+
+volumes:
+  ecommerce_postgres_data:
+    name: ${DEV_DB_VOLUME_NAME:-ecommerce_postgres_data}
