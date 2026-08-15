@@ -15,8 +15,14 @@ import {
 } from 'class-validator';
 import { Trim } from '../../catalog/dto-validation';
 import { VND_MAX_AMOUNT } from '../../money/vnd-money';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateProductVariantDto {
+  @ApiProperty({
+    example: 'LAPTOP-16-512-BLK',
+    maxLength: 64,
+    description: 'Unique purchasable SKU.',
+  })
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toUpperCase() : value,
   )
@@ -25,31 +31,52 @@ export class CreateProductVariantDto {
   @MaxLength(64)
   sku!: string;
 
+  @ApiProperty({ example: '16 GB / 512 GB / Black', maxLength: 255 })
   @Trim()
   @IsString()
   @IsNotEmpty()
   @MaxLength(255)
   name!: string;
 
+  @ApiProperty({
+    type: 'integer',
+    example: 24990000,
+    minimum: 0,
+    maximum: VND_MAX_AMOUNT,
+    description: 'Integer VND; decimals are not accepted.',
+  })
   @IsInt()
   @Min(0)
   @Max(VND_MAX_AMOUNT)
   price!: number;
 
+  @ApiProperty({ type: 'integer', example: 25, minimum: 0 })
   @IsInt()
   @Min(0)
   stock!: number;
 
+  @ApiPropertyOptional({
+    example: { ram: '16GB', storage: '512GB', color: 'black' },
+    type: 'object',
+    additionalProperties: { type: 'string' },
+  })
   @IsOptional()
   @Transform(({ value }: { value: unknown }) => normalizeAttributes(value))
   @IsObject()
   @IsStringRecord()
   attributes?: Record<string, string>;
 
+  @ApiPropertyOptional({ example: true, default: true })
   @IsOptional()
   @IsBoolean()
   isActive?: boolean;
 
+  @ApiPropertyOptional({
+    type: 'integer',
+    example: 0,
+    minimum: 0,
+    default: 0,
+  })
   @IsOptional()
   @IsInt()
   @Min(0)

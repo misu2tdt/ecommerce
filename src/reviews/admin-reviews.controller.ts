@@ -6,6 +6,13 @@ import {
   Patch,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOperation,
+  ApiTags,
+  ApiUnauthorizedResponse,
+} from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -16,10 +23,18 @@ import { ProductReviewsService } from './product-reviews.service';
 @Controller('admin/reviews')
 @UseGuards(AuthGuard, RolesGuard)
 @Roles(UserRole.ADMIN)
+@ApiTags('Admin - Reviews')
+@ApiBearerAuth('bearer')
+@ApiUnauthorizedResponse({ description: 'Bearer JWT is missing or invalid.' })
+@ApiForbiddenResponse({ description: 'ADMIN role required.' })
 export class AdminReviewsController {
   constructor(private readonly reviewsService: ProductReviewsService) {}
 
   @Patch(':reviewId/visibility')
+  @ApiOperation({
+    summary: 'Set public visibility of a Product review',
+    description: 'ADMIN only.',
+  })
   setVisibility(
     @Param('reviewId', ParseIntPipe) reviewId: number,
     @Body() dto: UpdateReviewVisibilityDto,

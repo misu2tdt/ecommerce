@@ -9,6 +9,7 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import { Roles } from '../auth/roles.decorator';
 import { RolesGuard } from '../auth/roles.guard';
@@ -18,20 +19,25 @@ import { CreateBrandDto } from './dto/create-brand.dto';
 import { UpdateBrandDto } from './dto/update-brand.dto';
 
 @Controller('brands')
+@ApiTags('Catalog - Brands')
 export class BrandsController {
   constructor(private readonly brandsService: BrandsService) {}
 
   @Get()
+  @ApiOperation({ summary: 'List brands' })
   findAll() {
     return this.brandsService.findAll();
   }
 
   @Get(':slug')
+  @ApiOperation({ summary: 'Get a brand by slug' })
   findBySlug(@Param('slug') slug: string) {
     return this.brandsService.findBySlug(slug);
   }
 
   @Post()
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Create a brand', description: 'ADMIN only.' })
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   create(@Body() dto: CreateBrandDto) {
@@ -39,6 +45,8 @@ export class BrandsController {
   }
 
   @Patch(':id')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Update a brand', description: 'ADMIN only.' })
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   update(@Param('id', ParseIntPipe) id: number, @Body() dto: UpdateBrandDto) {
@@ -46,6 +54,8 @@ export class BrandsController {
   }
 
   @Delete(':id')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Delete a brand', description: 'ADMIN only.' })
   @UseGuards(AuthGuard, RolesGuard)
   @Roles(UserRole.ADMIN)
   remove(@Param('id', ParseIntPipe) id: number) {

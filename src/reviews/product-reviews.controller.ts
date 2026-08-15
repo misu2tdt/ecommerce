@@ -9,6 +9,12 @@ import {
   Post,
   UseGuards,
 } from '@nestjs/common';
+import {
+  ApiBearerAuth,
+  ApiForbiddenResponse,
+  ApiOperation,
+  ApiTags,
+} from '@nestjs/swagger';
 import { AuthGuard } from '../auth/auth.guard';
 import type { AuthenticatedUser } from '../auth/auth.types';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -17,15 +23,26 @@ import { UpdateProductReviewDto } from './dto/update-product-review.dto';
 import { ProductReviewsService } from './product-reviews.service';
 
 @Controller('products/:productId/reviews')
+@ApiTags('Reviews')
 export class ProductReviewsController {
   constructor(private readonly reviewsService: ProductReviewsService) {}
 
   @Get()
+  @ApiOperation({
+    summary: 'List visible public reviews for a Product',
+    description: 'Hidden reviews are excluded.',
+  })
   findPublic(@Param('productId', ParseIntPipe) productId: number) {
     return this.reviewsService.findPublic(productId);
   }
 
   @Post()
+  @ApiForbiddenResponse({ description: 'A DELIVERED purchase is required.' })
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Create the current user’s Product review',
+    description: 'Requires a DELIVERED purchase of the Product.',
+  })
   @UseGuards(AuthGuard)
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -36,6 +53,8 @@ export class ProductReviewsController {
   }
 
   @Patch('mine')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Update the current user’s Product review' })
   @UseGuards(AuthGuard)
   updateMine(
     @CurrentUser() user: AuthenticatedUser,
@@ -46,6 +65,8 @@ export class ProductReviewsController {
   }
 
   @Delete('mine')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Delete the current user’s Product review' })
   @UseGuards(AuthGuard)
   removeMine(
     @CurrentUser() user: AuthenticatedUser,
