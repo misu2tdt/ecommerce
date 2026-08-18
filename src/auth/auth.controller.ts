@@ -15,8 +15,10 @@ import {
   ApiUnauthorizedResponse,
 } from '@nestjs/swagger';
 import { UserRole } from '../users/entities/user-role.enum';
+import type { AuthenticatedUser } from './auth.types';
 import { AuthGuard } from './auth.guard';
 import { AuthService } from './auth.service';
+import { CurrentUser } from './current-user.decorator';
 import { LoginDto } from './dto/login.dto';
 import { Roles } from './roles.decorator';
 import { RolesGuard } from './roles.guard';
@@ -41,6 +43,25 @@ export class AuthController {
   @ApiUnauthorizedResponse({ description: 'Invalid email or password.' })
   login(@Body() loginDto: LoginDto) {
     return this.authService.login(loginDto.email, loginDto.password);
+  }
+
+  @UseGuards(AuthGuard)
+  @Get('me')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Get the authenticated user identity' })
+  @ApiOkResponse({
+    description: 'Verified identity from the bearer token.',
+    schema: {
+      example: {
+        id: 1,
+        email: 'shopper@example.test',
+        role: UserRole.USER,
+      },
+    },
+  })
+  @ApiUnauthorizedResponse({ description: 'Missing, invalid, or expired token.' })
+  me(@CurrentUser() user: AuthenticatedUser) {
+    return user;
   }
 
   @UseGuards(AuthGuard, RolesGuard)
