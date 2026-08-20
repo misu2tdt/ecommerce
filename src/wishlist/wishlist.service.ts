@@ -9,6 +9,14 @@ import { ProductStatus } from '../products/entities/product-status.enum';
 import { Product } from '../products/entities/product.entity';
 import { WishlistItem } from './entities/wishlist-item.entity';
 
+interface WishlistRawSummary {
+  minPrice: string | null;
+  maxPrice: string | null;
+  inStock: boolean | string;
+  averageRating: string | null;
+  reviewCount: number | string;
+}
+
 @Injectable()
 export class WishlistService {
   constructor(private readonly dataSource: DataSource) {}
@@ -70,51 +78,63 @@ export class WishlistService {
       .addSelect(
         'EXISTS(SELECT 1 FROM "product_variants" v WHERE v."productId" = product.id AND v."isActive" = true AND v."stock" > 0)',
         'inStock',
+      )
+      .addSelect(
+        '(SELECT ROUND(AVG(r."rating")::numeric, 2) FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'averageRating',
+      )
+      .addSelect(
+        '(SELECT COUNT(*)::int FROM "product_reviews" r WHERE r."productId" = product.id AND r."isVisible" = true)',
+        'reviewCount',
       );
     if (productId !== undefined)
       builder.andWhere('wishlist.productId = :productId', { productId });
     const { entities, raw } = await builder
       .orderBy('wishlist.createdAt', 'DESC')
       .addOrderBy('wishlist.id', 'DESC')
-      .getRawAndEntities();
+      .getRawAndEntities<WishlistRawSummary>();
 
-    return entities.map((item, index) => ({
-      id: item.id,
-      createdAt: item.createdAt,
-      product: {
-        id: item.product.id,
-        name: item.product.name,
-        slug: item.product.slug,
-        status: item.product.status,
-        available: item.product.status === ProductStatus.ACTIVE,
-        category: {
-          id: item.product.category.id,
-          name: item.product.category.name,
-          slug: item.product.category.slug,
+    return entities.map((item, index) => {
+      const summary = raw[index];
+      return {
+        id: item.id,
+        createdAt: item.createdAt,
+        product: {
+          id: item.product.id,
+          name: item.product.name,
+          slug: item.product.slug,
+          status: item.product.status,
+          available: item.product.status === ProductStatus.ACTIVE,
+          category: {
+            id: item.product.category.id,
+            name: item.product.category.name,
+            slug: item.product.category.slug,
+          },
+          brand: item.product.brand
+            ? {
+                id: item.product.brand.id,
+                name: item.product.brand.name,
+                slug: item.product.brand.slug,
+              }
+            : null,
+          primaryImage: item.product.images?.[0]
+            ? {
+                url: item.product.images[0].url,
+                altText: item.product.images[0].altText,
+              }
+            : null,
+          minPrice:
+            summary.minPrice === null ? null : parseVndAmount(summary.minPrice),
+          maxPrice:
+            summary.maxPrice === null ? null : parseVndAmount(summary.maxPrice),
+          inStock: summary.inStock === true || summary.inStock === 'true',
+          averageRating:
+            summary.averageRating === null
+              ? null
+              : Number(summary.averageRating),
+          reviewCount: Number(summary.reviewCount),
         },
-        brand: item.product.brand
-          ? {
-              id: item.product.brand.id,
-              name: item.product.brand.name,
-              slug: item.product.brand.slug,
-            }
-          : null,
-        primaryImage: item.product.images?.[0]
-          ? {
-              url: item.product.images[0].url,
-              altText: item.product.images[0].altText,
-            }
-          : null,
-        minPrice:
-          raw[index].minPrice === null
-            ? null
-            : parseVndAmount(raw[index].minPrice),
-        maxPrice:
-          raw[index].maxPrice === null
-            ? null
-            : parseVndAmount(raw[index].maxPrice),
-        inStock: raw[index].inStock === true || raw[index].inStock === 'true',
-      },
-    }));
+      };
+    });
   }
 }

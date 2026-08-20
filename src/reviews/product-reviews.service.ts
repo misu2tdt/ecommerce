@@ -60,6 +60,14 @@ export class ProductReviewsService {
     return repository.save(review);
   }
 
+  async findMine(userId: number, productId: number) {
+    const review = await this.dataSource
+      .getRepository(ProductReview)
+      .findOneBy({ userId, productId });
+    if (!review) throw new NotFoundException('Product review not found');
+    return this.toReviewResponse(review, true);
+  }
+
   async removeMine(userId: number, productId: number) {
     const result = await this.dataSource
       .getRepository(ProductReview)
@@ -79,14 +87,7 @@ export class ProductReviewsService {
       where: { productId, isVisible: true },
       order: { createdAt: 'DESC', id: 'DESC' },
     });
-    return reviews.map(({ id, rating, title, body, createdAt, updatedAt }) => ({
-      id,
-      rating,
-      title,
-      body,
-      createdAt,
-      updatedAt,
-    }));
+    return reviews.map((review) => this.toReviewResponse(review));
   }
 
   async setVisibility(reviewId: number, isVisible: boolean) {
@@ -125,5 +126,18 @@ export class ProductReviewsService {
       .andWhere('order.status = :status', { status: OrderStatus.DELIVERED })
       .andWhere('variant.productId = :productId', { productId })
       .getExists();
+  }
+
+  private toReviewResponse(review: ProductReview, includeVisibility = false) {
+    const { id, rating, title, body, createdAt, updatedAt, isVisible } = review;
+    return {
+      id,
+      rating,
+      title,
+      body,
+      createdAt,
+      updatedAt,
+      ...(includeVisibility ? { isVisible } : {}),
+    };
   }
 }

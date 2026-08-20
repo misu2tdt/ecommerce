@@ -19,9 +19,13 @@ describe('ProductReviewsService', () => {
   const itemRepo = { createQueryBuilder: jest.fn(() => eligibilityBuilder) };
   const aggregateBuilder = chain({ getRawOne: jest.fn() });
   const reviewRepo = {
-    create: jest.fn(),
-    save: jest.fn(),
-    findOneBy: jest.fn(),
+    create:
+      jest.fn<(value: Partial<ProductReview>) => Partial<ProductReview>>(),
+    save: jest.fn<(value: Partial<ProductReview>) => Promise<ProductReview>>(),
+    findOneBy:
+      jest.fn<
+        (where: Partial<ProductReview>) => Promise<ProductReview | null>
+      >(),
     delete: jest.fn(),
     find: jest.fn(),
     createQueryBuilder: jest.fn(() => aggregateBuilder),
@@ -39,8 +43,12 @@ describe('ProductReviewsService', () => {
     jest.clearAllMocks();
     productRepo.existsBy.mockResolvedValue(true);
     eligibilityBuilder.getExists.mockResolvedValue(true);
-    reviewRepo.create.mockImplementation((value) => value);
-    reviewRepo.save.mockImplementation(async (value) => ({ id: 1, ...value }));
+    reviewRepo.create.mockImplementation(
+      (value: Partial<ProductReview>): Partial<ProductReview> => value,
+    );
+    reviewRepo.save.mockImplementation((value) =>
+      Promise.resolve({ ...review(), ...value, id: 1 }),
+    );
     reviewRepo.findOneBy.mockResolvedValue(review());
     reviewRepo.delete.mockResolvedValue({ affected: 1 });
     reviewRepo.find.mockResolvedValue([review()]);
@@ -107,6 +115,30 @@ describe('ProductReviewsService', () => {
     });
     expect(result[0]).not.toHaveProperty('userId');
     expect(result[0]).not.toHaveProperty('user');
+  });
+
+  it('returns only the current user review fields and 404s when absent', async () => {
+    const result = await service.findMine(7, 3);
+    expect(reviewRepo.findOneBy).toHaveBeenCalledWith({
+      userId: 7,
+      productId: 3,
+    });
+    expect(result).toMatchObject({
+      id: 1,
+      rating: 5,
+      title: 'Excellent',
+      body: null,
+      isVisible: true,
+    });
+    expect(result.createdAt).toBeInstanceOf(Date);
+    expect(result.updatedAt).toBeInstanceOf(Date);
+    expect(result).not.toHaveProperty('userId');
+    expect(result).not.toHaveProperty('productId');
+
+    reviewRepo.findOneBy.mockResolvedValue(null);
+    await expect(service.findMine(7, 3)).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
   });
 
   it('admin changes visibility without deleting and summary is visible-only', async () => {

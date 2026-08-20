@@ -77,6 +77,8 @@ describe('WishlistService', () => {
       minPrice: 100_000,
       maxPrice: 200_000,
       inStock: true,
+      averageRating: 4.5,
+      reviewCount: 2,
     });
     expect(result[0].product.primaryImage).not.toHaveProperty('storageKey');
   });
@@ -124,6 +126,14 @@ function wishlistResult() {
         },
       } as WishlistItem,
     ],
-    raw: [{ minPrice: '100000', maxPrice: '200000', inStock: true }],
+    raw: [
+      {
+        minPrice: '100000',
+        maxPrice: '200000',
+        inStock: true,
+        averageRating: '4.50',
+        reviewCount: 2,
+      },
+    ],
   };
 }

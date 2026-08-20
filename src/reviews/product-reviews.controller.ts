@@ -36,6 +36,17 @@ export class ProductReviewsController {
     return this.reviewsService.findPublic(productId);
   }
 
+  @Get('mine')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({ summary: 'Get the current user’s Product review' })
+  @UseGuards(AuthGuard)
+  findMine(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('productId', ParseIntPipe) productId: number,
+  ) {
+    return this.reviewsService.findMine(user.id, productId);
+  }
+
   @Post()
   @ApiForbiddenResponse({ description: 'A DELIVERED purchase is required.' })
   @ApiBearerAuth('bearer')
