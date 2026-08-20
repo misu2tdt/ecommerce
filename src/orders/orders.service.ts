@@ -113,6 +113,7 @@ export class OrdersService {
         );
         variant.stock -= requested.quantity;
         await variantRepo.save(variant);
+        variant.product = locked[index].product;
         items.push(
           orderItemRepo.create({
             variant,
@@ -141,11 +142,12 @@ export class OrdersService {
       return order;
     });
 
-    const message = `New order for user ${userId}; total ${savedOrder.totalPrice} VND; status ${savedOrder.status}`;
+    const orderView = this.toOrderView(savedOrder);
+    const message = `New order for user ${userId}; total ${orderView.totalPrice} VND; status ${orderView.status}`;
     void this.telegramService
       .sendMessage(message)
       .catch(() => this.logger.error('Unable to send order notification'));
-    return savedOrder;
+    return orderView;
   }
 
   async findAllForUser(userId: number) {

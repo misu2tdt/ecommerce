@@ -115,6 +115,27 @@ describe('OrdersService lifecycle', () => {
     expect(telegram.sendMessage.mock.calls[0][0]).not.toContain('$');
   });
 
+  it('returns a plain serializable Order view after checkout', async () => {
+    const result = await service.checkout(7, {
+      addressId: 12,
+      items: [{ variantId: 1, quantity: 1 }],
+    });
+
+    expect(() => JSON.stringify(result)).not.toThrow();
+    expect(result).toEqual(
+      expect.objectContaining({
+        id: 1,
+        userId: 7,
+        status: OrderStatus.PENDING,
+        totalPrice: 100_000,
+      }),
+    );
+    expect(result.items[0]).not.toHaveProperty('order');
+    expect(result.items[0].variant.product).toEqual(
+      expect.objectContaining({ id: 10, name: 'Product', slug: 'product' }),
+    );
+  });
+
   it('aggregates duplicates and locks unique Variant IDs in ascending order', async () => {
     variantRepo.findOne.mockImplementation(async ({ where }) =>
       variant({ id: where.id, stock: 5 }),

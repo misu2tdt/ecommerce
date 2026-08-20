@@ -96,7 +96,9 @@ describe('Variant checkout PostgreSQL integration', () => {
     ]);
     const blocker = dataSource.createQueryRunner();
     const promises: Array<ReturnType<OrdersService['checkout']>> = [];
-    let results: PromiseSettledResult<Order>[] = [];
+    let results: PromiseSettledResult<
+      Awaited<ReturnType<OrdersService['checkout']>>
+    >[] = [];
     try {
       await blocker.connect();
       await blocker.startTransaction();
