@@ -20,6 +20,7 @@ import { ProviderPaymentEvent } from './payment-event';
 import { PaymentProvider } from './payment-provider';
 import { PaymentProviderAmbiguousError } from './provider-errors';
 import { PAYMENT_CURRENCY } from './payments.constants';
+import { MOMO_PROVIDER } from './momo/momo.constants';
 
 @Injectable()
 export class PaymentsService {
@@ -83,6 +84,26 @@ export class PaymentsService {
       order: { createdAt: 'DESC', id: 'DESC' },
     });
     return payments.map((payment) => this.toPaymentView(payment));
+  }
+
+  async findMomoReturnOrder(userId: number, providerPaymentId: string) {
+    const normalized = providerPaymentId.trim();
+    if (!normalized || normalized.length > 255)
+      throw new BadRequestException('Invalid provider Payment identifier');
+    const payment = await this.dataSource
+      .getRepository(Payment)
+      .createQueryBuilder('payment')
+      .innerJoin('payment.order', 'order')
+      .where('payment.provider = :provider', {
+        provider: MOMO_PROVIDER,
+      })
+      .andWhere('payment.providerPaymentId = :providerPaymentId', {
+        providerPaymentId: normalized,
+      })
+      .andWhere('order.userId = :userId', { userId })
+      .getOne();
+    if (!payment) throw new NotFoundException('Payment return not found');
+    return { orderId: payment.orderId };
   }
 
   processEvent(input: ProviderPaymentEvent) {

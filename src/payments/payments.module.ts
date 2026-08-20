@@ -12,7 +12,10 @@ import {
   DEFAULT_PAYMENT_CURRENCY,
   PAYMENT_CURRENCY,
 } from './payments.constants';
-import { PaymentsController } from './payments.controller';
+import {
+  MomoPaymentReturnController,
+  PaymentsController,
+} from './payments.controller';
 import { PaymentsService } from './payments.service';
 import { getMomoConfig, MomoConfig } from './momo/momo.config';
 import { MOMO_CONFIG, MOMO_HTTP_CLIENT } from './momo/momo.constants';
@@ -26,7 +29,11 @@ import { MomoWebhookController } from './momo/momo-webhook.controller';
     TypeOrmModule.forFeature([Payment, PaymentEvent, Order]),
     AuthModule,
   ],
-  controllers: [PaymentsController, MomoWebhookController],
+  controllers: [
+    PaymentsController,
+    MomoPaymentReturnController,
+    MomoWebhookController,
+  ],
   providers: [
     PaymentsService,
     FakePaymentProvider,

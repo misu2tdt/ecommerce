@@ -1,6 +1,5 @@
 import { BadGatewayException, ConflictException } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { AddressesService } from '../../src/addresses/addresses.service';
 import {
   PaymentEventProcessingStatus,
   PaymentEventType,

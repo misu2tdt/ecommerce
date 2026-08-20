@@ -89,3 +89,26 @@ export class PaymentsController {
     return this.paymentsService.findForOrder(user.id, orderId);
   }
 }
+
+@Controller('payments/momo')
+@UseGuards(AuthGuard)
+@ApiTags('Payments')
+@ApiBearerAuth('bearer')
+@ApiUnauthorizedResponse({ description: 'Bearer JWT is missing or invalid.' })
+export class MomoPaymentReturnController {
+  constructor(private readonly paymentsService: PaymentsService) {}
+
+  @Get('return/:providerPaymentId')
+  @ApiOperation({
+    summary: 'Resolve an owned Order from a MoMo browser return identifier',
+    description:
+      'Returns only the owned Order mapping. Browser return fields do not change Payment state.',
+  })
+  @ApiNotFoundResponse({ description: 'Owned Payment return not found.' })
+  resolve(
+    @CurrentUser() user: AuthenticatedUser,
+    @Param('providerPaymentId') providerPaymentId: string,
+  ) {
+    return this.paymentsService.findMomoReturnOrder(user.id, providerPaymentId);
+  }
+}

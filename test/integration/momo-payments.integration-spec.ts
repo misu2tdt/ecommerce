@@ -50,10 +50,15 @@ describe('MoMo payment PostgreSQL integration with mocked HTTP', () => {
     timeoutMs: 30_000,
   };
   let dataSource: DataSource;
-  let http: { postJson: jest.Mock };
+  let http: {
+    postJson: jest.Mock<
+      (url: string, body: Record<string, unknown>) => unknown
+    >;
+  };
   let payments: PaymentsService;
   let ipn: MomoIpnService;
   let orders: OrdersService;
+  let createBodies: Record<string, unknown>[];
 
   beforeAll(async () => {
     dataSource = await initializeTestDatabase();
@@ -61,7 +66,15 @@ describe('MoMo payment PostgreSQL integration with mocked HTTP', () => {
 
   beforeEach(async () => {
     await cleanTestDatabase(dataSource);
-    http = { postJson: jest.fn().mockImplementation(successfulCreate) };
+    createBodies = [];
+    http = {
+      postJson: jest.fn<
+        (url: string, body: Record<string, unknown>) => unknown
+      >((url: string, body: Record<string, unknown>) => {
+        createBodies.push(body);
+        return successfulCreate(url, body);
+      }),
+    };
     const provider = new MomoPaymentProvider(
       config,
       http as unknown as MomoHttpClient,
@@ -109,8 +122,19 @@ describe('MoMo payment PostgreSQL integration with mocked HTTP', () => {
     expect(repeated.status).toBe(PaymentStatus.PROCESSING);
     expect(repeated).not.toHaveProperty('checkoutUrl');
     expect(stored.providerPaymentId).toBe(orderId);
+    await expect(
+      payments.findMomoReturnOrder(fixture.user.id, orderId),
+    ).resolves.toEqual({ orderId: fixture.order.id });
+    const other = await dataSource.getRepository(User).save({
+      email: 'momo-return-other@momo.test',
+      password: 'hash',
+      role: UserRole.USER,
+    });
+    await expect(
+      payments.findMomoReturnOrder(other.id, orderId),
+    ).rejects.toThrow('Payment return not found');
     expect(http.postJson).toHaveBeenCalledTimes(1);
-    expect(http.postJson.mock.calls[0][1]).toEqual(
+    expect(createBodies[0]).toEqual(
       expect.objectContaining({
         orderId,
         requestId,
