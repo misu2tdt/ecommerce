@@ -166,6 +166,32 @@ export class ProductsController {
     return this.productImagesService.removeForProduct(productId, imageId);
   }
 
+  @Get('admin')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'List all Products for catalog administration',
+    description:
+      'ADMIN only. Includes inactive Products and Variants, all image metadata, and excludes storage keys.',
+  })
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  findAllForAdmin() {
+    return this.productsService.findAllForAdmin();
+  }
+
+  @Get('admin/:id')
+  @ApiBearerAuth('bearer')
+  @ApiOperation({
+    summary: 'Get a Product for catalog administration',
+    description:
+      'ADMIN only. Includes inactive Variants, all image metadata, and excludes storage keys.',
+  })
+  @UseGuards(AuthGuard, RolesGuard)
+  @Roles(UserRole.ADMIN)
+  findOneForAdmin(@Param('id', ParseIntPipe) id: number) {
+    return this.productsService.findOneForAdmin(id);
+  }
+
   @Post()
   @ApiBearerAuth('bearer')
   @ApiOperation({

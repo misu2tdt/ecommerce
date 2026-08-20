@@ -14,6 +14,7 @@ describe('ProductsService', () => {
     create: jest.fn(),
     save: jest.fn(),
     findOne: jest.fn(),
+    find: jest.fn(),
     delete: jest.fn(),
   };
   const categoriesRepository = { findOneBy: jest.fn() };
@@ -122,6 +123,45 @@ describe('ProductsService', () => {
         slug: 'stable-product-slug',
       }),
     );
+  });
+
+  it('returns inactive catalog state for ADMIN without image storage keys', async () => {
+    productsRepository.findOne.mockResolvedValue({
+      id: 1,
+      name: 'Draft product',
+      slug: 'draft-product',
+      status: ProductStatus.INACTIVE,
+      category: { id: 10 },
+      brand: null,
+      images: [
+        {
+          id: 3,
+          url: 'https://example.test/image.webp',
+          storageKey: 'private/storage/key',
+          isPrimary: true,
+          position: 0,
+        },
+      ],
+      variants: [
+        {
+          id: 7,
+          sku: 'DRAFT-1',
+          name: 'Draft SKU',
+          price: 120000,
+          stock: 2,
+          attributes: {},
+          isActive: false,
+          position: 0,
+        },
+      ],
+    });
+
+    const result = await service.findOneForAdmin(1);
+
+    expect(result.status).toBe(ProductStatus.INACTIVE);
+    expect(result.variants[0].isActive).toBe(false);
+    expect(result.minPrice).toBeNull();
+    expect(result.images[0]).not.toHaveProperty('storageKey');
   });
 
   it('explicitly removes Brand when brandId is null', async () => {

@@ -39,6 +39,14 @@ export type PublicProduct = Omit<Product, 'images' | 'variants'> & {
   >;
 };
 
+export type AdminProduct = Omit<Product, 'images' | 'variants'> & {
+  images: PublicProductImage[];
+  variants: Array<Omit<ProductVariant, 'product' | 'orderItems' | 'cartItems'>>;
+  minPrice: number | null;
+  maxPrice: number | null;
+  inStock: boolean;
+};
+
 @Injectable()
 export class ProductsService {
   private readonly logger = new Logger(ProductsService.name);
@@ -159,6 +167,32 @@ export class ProductsService {
         reviewCount: Number(raw[index].reviewCount),
       }),
     );
+  }
+
+  async findAllForAdmin(): Promise<AdminProduct[]> {
+    const products = await this.productsRepository.find({
+      relations: { category: true, brand: true, images: true, variants: true },
+      order: {
+        name: 'ASC',
+        id: 'ASC',
+        images: { isPrimary: 'DESC', position: 'ASC', id: 'ASC' },
+        variants: { position: 'ASC', id: 'ASC' },
+      },
+    });
+    return products.map((product) => this.toAdminProduct(product));
+  }
+
+  async findOneForAdmin(id: number): Promise<AdminProduct> {
+    const product = await this.productsRepository.findOne({
+      where: { id },
+      relations: { category: true, brand: true, images: true, variants: true },
+      order: {
+        images: { isPrimary: 'DESC', position: 'ASC', id: 'ASC' },
+        variants: { position: 'ASC', id: 'ASC' },
+      },
+    });
+    if (!product) throw new NotFoundException('Product not found');
+    return this.toAdminProduct(product);
   }
 
   async findBySlug(slug: string): Promise<PublicProduct> {
@@ -296,6 +330,40 @@ export class ProductsService {
       images: images.map(
         ({ storageKey: _storageKey, product: _product, ...image }) => image,
       ),
+    };
+  }
+
+  private toAdminProduct(product: Product): AdminProduct {
+    const { images = [], variants = [], ...fields } = product;
+    const activeVariants = variants.filter((variant) => variant.isActive);
+    const prices = activeVariants.map((variant) => variant.price);
+    return {
+      ...fields,
+      images: images.map((image) => ({
+        id: image.id,
+        url: image.url,
+        altText: image.altText,
+        position: image.position,
+        isPrimary: image.isPrimary,
+        productId: image.productId,
+        createdAt: image.createdAt,
+      })),
+      variants: variants.map((variant) => ({
+        id: variant.id,
+        productId: variant.productId,
+        sku: variant.sku,
+        name: variant.name,
+        price: variant.price,
+        stock: variant.stock,
+        attributes: variant.attributes,
+        isActive: variant.isActive,
+        position: variant.position,
+        createdAt: variant.createdAt,
+        updatedAt: variant.updatedAt,
+      })),
+      minPrice: prices.length ? Math.min(...prices) : null,
+      maxPrice: prices.length ? Math.max(...prices) : null,
+      inStock: activeVariants.some((variant) => variant.stock > 0),
     };
   }
 }
