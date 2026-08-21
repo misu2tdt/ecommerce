@@ -90,6 +90,28 @@ export class ProductReviewsService {
     return reviews.map((review) => this.toReviewResponse(review));
   }
 
+  async findAllForAdmin() {
+    const reviews = await this.dataSource.getRepository(ProductReview).find({
+      relations: { product: true },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    return reviews.map((review) => ({
+      id: review.id,
+      userId: review.userId,
+      rating: review.rating,
+      title: review.title,
+      body: review.body,
+      isVisible: review.isVisible,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
+      product: {
+        id: review.product.id,
+        name: review.product.name,
+        slug: review.product.slug,
+      },
+    }));
+  }
+
   async setVisibility(reviewId: number, isVisible: boolean) {
     const repository = this.dataSource.getRepository(ProductReview);
     const review = await repository.findOneBy({ id: reviewId });

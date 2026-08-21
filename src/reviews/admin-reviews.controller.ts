@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Get,
   Param,
   ParseIntPipe,
   Patch,
@@ -29,6 +30,16 @@ import { ProductReviewsService } from './product-reviews.service';
 @ApiForbiddenResponse({ description: 'ADMIN role required.' })
 export class AdminReviewsController {
   constructor(private readonly reviewsService: ProductReviewsService) {}
+
+  @Get()
+  @ApiOperation({
+    summary: 'List Product reviews for moderation',
+    description:
+      'ADMIN only. Includes visibility, reviewer ID, and safe Product context.',
+  })
+  findAll() {
+    return this.reviewsService.findAllForAdmin();
+  }
 
   @Patch(':reviewId/visibility')
   @ApiOperation({

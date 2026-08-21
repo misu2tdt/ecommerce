@@ -117,6 +117,30 @@ describe('ProductReviewsService', () => {
     expect(result[0]).not.toHaveProperty('user');
   });
 
+  it('lists moderation fields with Product context but no User relation', async () => {
+    const selected = review();
+    selected.product = {
+      id: 3,
+      name: 'Catalog Product',
+      slug: 'catalog-product',
+    } as Product;
+    reviewRepo.find.mockResolvedValue([selected]);
+
+    const result = await service.findAllForAdmin();
+
+    expect(reviewRepo.find).toHaveBeenCalledWith({
+      relations: { product: true },
+      order: { createdAt: 'DESC', id: 'DESC' },
+    });
+    expect(result[0]).toMatchObject({
+      id: 1,
+      userId: 7,
+      isVisible: true,
+      product: { id: 3, name: 'Catalog Product', slug: 'catalog-product' },
+    });
+    expect(result[0]).not.toHaveProperty('user');
+  });
+
   it('returns only the current user review fields and 404s when absent', async () => {
     const result = await service.findMine(7, 3);
     expect(reviewRepo.findOneBy).toHaveBeenCalledWith({
